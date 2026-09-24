@@ -2,5 +2,3 @@
 # data, so ignore everything and opt files in explicitly.
 *
 !.gitignore
-!test_antigravity.py
-!requirements.txt
