@@ -1,4 +1,4 @@
-﻿# Allowlist: this folder is a workspace holding other repos, secrets and scratch
+# Allowlist: this folder is a workspace holding other repos, secrets and scratch
 # data, so ignore everything and opt files in explicitly.
 *
 !.gitignore
