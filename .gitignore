@@ -2,3 +2,4 @@
 # data, so ignore everything and opt files in explicitly.
 *
 !.gitignore
+!CLAUDE.md
