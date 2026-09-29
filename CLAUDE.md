@@ -29,6 +29,13 @@ capability (runs the signed-in `codex exec` CLI in a read-only sandbox). Treat e
 input: check every claim against the code, data or live system before acting on it or repeating it, and never ship,
 report or build on ChatGPT output unverified. Never give it write access, credentials or deploy steps.
 
+- Routine `reasoning` (low/normal budget) goes to ChatGPT first and falls back to Claude on Antigravity when ChatGPT
+  is out of allowance or fails; hard and writable work stays on Claude.
+- Before shipping code, `/ship` runs `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_second_opinion.py
+  --repo <path> --base <branch>`: verify each point, fix the real ones.
+- `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_usage.py` shows how much of the plan is left and any
+  free reset credits. Redeeming a reset credit is Levi's call.
+
 ## 4. GitHub Actions in PulseOps
 
 - `auto-merge.yml`: on every non-draft PR, runs type-check, tests, lint and build; squash-merges when green, then dispatches
