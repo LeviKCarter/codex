@@ -33,6 +33,9 @@ report or build on ChatGPT output unverified. Never give it write access, creden
   is out of allowance or fails; hard and writable work stays on Claude.
 - Before shipping code, `/ship` runs `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_second_opinion.py
   --repo <path> --base <branch>`: verify each point, fix the real ones.
+- To save Claude credits, offload read-only drafts, summaries and first-pass reviews:
+  `python C:\Users\levik\Documents\Codex\PulseAgent\ask_chatgpt.py "question"` (exit 3 = ChatGPT unavailable, do
+  it in Claude). Put everything it needs in the prompt; it cannot read files. Verify the answer.
 - `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_usage.py` shows how much of the plan is left and any
   free reset credits. Redeeming a reset credit is Levi's call.
 
