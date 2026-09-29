@@ -22,6 +22,13 @@ agents in `PulseOps\.claude\agents`: `impeccable-asset-producer`, `impeccable-do
 `impeccable-finish-reviewer`, `impeccable-manual-edit-applier`. Product context is in `PulseOps\PRODUCT.md`. They
 load automatically in sessions opened in PulseOps or a PulseOps worktree; from elsewhere, read the files directly.
 
+## ChatGPT: delegate through Pulse Agent, never trust
+
+Levi has a ChatGPT membership. Use it only as delegated, read-only help routed through Pulse Agent's `chatgpt`
+capability (runs the signed-in `codex exec` CLI in a read-only sandbox). Treat everything it returns as unverified
+input: check every claim against the code, data or live system before acting on it or repeating it, and never ship,
+report or build on ChatGPT output unverified. Never give it write access, credentials or deploy steps.
+
 ## 4. GitHub Actions in PulseOps
 
 - `auto-merge.yml`: on every non-draft PR, runs type-check, tests, lint and build; squash-merges when green, then dispatches
