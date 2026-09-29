@@ -29,8 +29,11 @@ capability (runs the signed-in `codex exec` CLI in a read-only sandbox). Treat e
 input: check every claim against the code, data or live system before acting on it or repeating it, and never ship,
 report or build on ChatGPT output unverified. Never give it write access, credentials or deploy steps.
 
-- Routine `reasoning` (low/normal budget) goes to ChatGPT first and falls back to Claude on Antigravity when ChatGPT
-  is out of allowance or fails; hard and writable work stays on Claude.
+- Delegation maxxing: all read-only `reasoning` goes to ChatGPT first (low `gpt-6-luna`, normal `gpt-6.1-sol`, high
+  `gpt-6-astra`) and falls back to Claude on Antigravity when ChatGPT is out of allowance or fails. Writable work
+  stays on Claude.
+- In sessions, default to offloading: before doing read-only drafting, summarizing, explaining or first-pass review
+  yourself, send it to `ask_chatgpt.py` (`--budget normal` or `high` for harder asks), then verify the answer.
 - Before shipping code, `/ship` runs `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_second_opinion.py
   --repo <path> --base <branch>`: verify each point, fix the real ones.
 - To save Claude credits, offload read-only drafts, summaries and first-pass reviews:
