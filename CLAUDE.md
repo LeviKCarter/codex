@@ -32,13 +32,15 @@ report or build on ChatGPT output unverified. Never give it write access, creden
 - Delegation maxxing: all read-only `reasoning` goes to ChatGPT first (low `gpt-6-luna`, normal `gpt-6.1-sol`, high
   `gpt-6-astra`) and falls back to Claude on Antigravity when ChatGPT is out of allowance or fails. Writable work
   stays on Claude.
-- In sessions, default to offloading: before doing read-only drafting, summarizing or explaining yourself, send it
-  to `ask_chatgpt.py` (`--budget normal` or `high` for harder asks), then verify the answer.
+- In sessions, use ChatGPT to get work done and save Claude credits: offload read-only grunt work such as digesting
+  long logs, output or pages, summarizing input for your own use, explaining code, or working out a research answer.
+  Run `python C:\Users\levik\Documents\Codex\PulseAgent\ask_chatgpt.py "question"` (`--budget normal` or `high` for
+  harder asks; exit 3 = ChatGPT unavailable, do it in Claude). Put everything it needs in the prompt; it cannot read
+  files. Verify the answer.
+- Never have ChatGPT write first versions of anything Levi reads or sends (messages, emails, docs, write-ups, PR
+  descriptions, replies): Claude writes those itself.
 - Never use ChatGPT for reviews or second opinions (no `chatgpt_second_opinion.py`, not in `/ship` either): it is
   there to get work done; reviewing stays with Claude.
-- To save Claude credits, offload read-only drafts and summaries:
-  `python C:\Users\levik\Documents\Codex\PulseAgent\ask_chatgpt.py "question"` (exit 3 = ChatGPT unavailable, do
-  it in Claude). Put everything it needs in the prompt; it cannot read files. Verify the answer.
 - `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_usage.py` shows how much of the plan is left and any
   free reset credits. Redeeming a reset credit is Levi's call.
 
