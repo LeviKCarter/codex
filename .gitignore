@@ -3,3 +3,8 @@
 *
 !.gitignore
 !CLAUDE.md
+# Project skills (the rest of .claude/, worktrees included, stays ignored).
+!.claude/
+!.claude/skills/
+!.claude/skills/pulse-canvas/
+!.claude/skills/pulse-canvas/**
