@@ -8,3 +8,9 @@
 !.claude/skills/
 !.claude/skills/pulse-canvas/
 !.claude/skills/pulse-canvas/**
+# Global skills kept here for backup: ~/.claude/skills/<name> is a junction to skills/<name> in the main checkout.
+# They are outside .claude/skills on purpose, so a session does not load them twice.
+!.gitattributes
+!skills/
+!skills/ship/
+!skills/ship/**
