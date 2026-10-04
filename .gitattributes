@@ -1,0 +1,3 @@
+# Skill files are read in place through a junction, so keep them LF on every checkout.
+skills/** text eol=lf
+.claude/skills/** text eol=lf
