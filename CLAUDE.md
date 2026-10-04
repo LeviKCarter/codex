@@ -22,6 +22,13 @@ agents in `PulseOps\.claude\agents`: `impeccable-asset-producer`, `impeccable-do
 `impeccable-finish-reviewer`, `impeccable-manual-edit-applier`. Product context is in `PulseOps\PRODUCT.md`. They
 load automatically in sessions opened in PulseOps or a PulseOps worktree; from elsewhere, read the files directly.
 
+### The Design canvas: `/pulse-canvas`
+
+Pulse Ops has a Design canvas on claude.ai (https://claude.ai/artifact/PT5o26Vn7ktP99Sa1hKvFT, private to Levi): every
+view of the live app as an artboard, plus playable desktop and phone prototypes. It is a frozen capture, so it goes
+stale with each deploy. `/pulse-canvas` (`.claude/skills/pulse-canvas` in this repo) recaptures it from :3000, keeps
+Levi's hand-edited artboards, and republishes; `/pulse-canvas check` stops before publishing.
+
 ## ChatGPT: delegate through Pulse Agent, never trust
 
 Levi has a ChatGPT membership. Use it only as delegated, read-only help routed through Pulse Agent's `chatgpt`
