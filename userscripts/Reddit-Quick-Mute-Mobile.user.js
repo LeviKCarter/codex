@@ -1172,6 +1172,9 @@
     if (!enabled || pending.has(name) || muted.has(name)) return;
     pending.add(name);
     const identity = postIdentity(post);
+    // Hide first: the tap should clear the feed without waiting on Reddit.
+    muted.add(name);
+    hideMutedPosts();
     updateButtons(name, "pending");
     try {
       const csrfCookie = document.cookie.split(";").map(part => part.trim()).find(part => part.startsWith("csrf_token="));
@@ -1208,6 +1211,9 @@
       catch { voteMessage = "Post downvote unavailable; mute succeeded."; }
       announce(`Muted r/${name} on Reddit. ${voteMessage}`);
     } catch (error) {
+      // Reddit did not mute it, so bring the posts back with a Retry button.
+      muted.delete(name);
+      hideMutedPosts();
       const message = error.name === "TimeoutError" ? "Reddit took too long to respond. Check your muted communities before retrying." : error.message || "Mute failed. Please retry.";
       updateButtons(name, "error", message);
       announce(message);
