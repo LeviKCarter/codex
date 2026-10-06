@@ -1097,7 +1097,12 @@
   function setState(button, name, state, message = "") {
     button.dataset.state = state;
     button.disabled = state === "pending" || state === "muted";
-    button.textContent = state === "pending" ? "Muting…" : state === "muted" ? `Muted r/${name}` : state === "error" ? "Mute failed · Retry" : `Mute r/${name}`;
+    // In a phone's header line there is room for one word, and the community's name is beside it.
+    const short = button.dataset.short === "1";
+    button.textContent = state === "pending" ? "Muting…"
+      : state === "muted" ? (short ? "Muted" : `Muted r/${name}`)
+      : state === "error" ? (short ? "Retry" : "Mute failed · Retry")
+      : short ? "Mute" : `Mute r/${name}`;
     button.title = message || `Mute r/${name} on Reddit`;
     button.setAttribute("aria-label", button.title);
   }
@@ -1201,7 +1206,8 @@
       }
       muted.add(name);
       // Keep the successful account action successful even if local storage is unavailable.
-      try { GM_setValue("hbrMutedSubreddits", [...muted]); } catch (error) { console.warn("Could not save local hiding list", error); }
+      // A tap still waiting on Reddit is not saved: if Reddit refuses it, it must not come back hidden.
+      try { GM_setValue("hbrMutedSubreddits", [...muted].filter(n => n === name || !pending.has(n))); } catch (error) { console.warn("Could not save local hiding list", error); }
       hideMutedPosts();
       updateButtons(name, "muted", `r/${name} is muted on Reddit`);
       // Keep a successful mute successful even if the post disappears or its
@@ -1226,16 +1232,32 @@
     const name = postSubreddit(post);
     let button = [...post.querySelectorAll(`[${BUTTON}]`)].find(button => button.closest(POSTS) === post);
     if (button && (!enabled || button.getAttribute(BUTTON) !== name)) {
-      button.closest(".hbr-quick-mute-row").remove(); button = null;
+      (button.closest(".hbr-quick-mute-row") || button).remove(); button = null;
     }
     if (!enabled || !name || button) return;
+    // The button sits in the header line, at the right beside the post's menu: small on a PC, and on
+    // the phone a short "Mute" a thumb can hit. A slim card wraps its header in a grid, so look
+    // through the card, but never into a nested post.
+    const credit = post.matches("shreddit-post") && [...post.querySelectorAll('[slot="credit-bar"]')]
+      .find(el => el.closest(POSTS) === post && !el.matches(".hbr-quick-mute-row"));
+    const desktop = post.hasAttribute("is-desktop-viewport");
+    const last = credit && credit.children.length > 1 ? credit.lastElementChild : null;
+    // The header's last part holds Join and the menu. On the phone, never go inside one that is itself
+    // a link, a button or the post's age: the button goes at the end of the header line instead.
+    const actions = last && (desktop || !last.matches("a,button,time,faceplate-timeago")) ? last : null;
+    const inline = actions || (!desktop && credit) || null;
     const row = document.createElement("div");
     row.className = "hbr-quick-mute-row";
     row.style.cssText = "display:block!important;width:100%!important;box-sizing:border-box!important;padding:4px 0!important;position:relative!important;z-index:2!important";
     button = document.createElement("button");
     button.type = "button";
     button.setAttribute(BUTTON, name);
-    button.style.cssText = "all:initial!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;min-height:44px!important;max-width:100%!important;padding:8px 14px!important;border:1px solid currentColor!important;border-radius:22px!important;color:inherit!important;background:transparent!important;font:600 14px/20px system-ui!important;white-space:normal!important;overflow-wrap:anywhere!important;cursor:pointer!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important";
+    if (inline && !desktop) button.dataset.short = "1";
+    button.style.cssText = !inline
+      ? "all:initial!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;min-height:44px!important;max-width:100%!important;padding:8px 14px!important;border:1px solid currentColor!important;border-radius:22px!important;color:inherit!important;background:transparent!important;font:600 14px/20px system-ui!important;white-space:normal!important;overflow-wrap:anywhere!important;cursor:pointer!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important"
+      : desktop
+      ? "all:initial!important;display:inline-flex!important;align-items:center!important;box-sizing:border-box!important;height:24px!important;margin:0 4px!important;padding:0 10px!important;border:1px solid currentColor!important;border-radius:12px!important;color:inherit!important;background:transparent!important;font:600 12px/16px system-ui!important;white-space:nowrap!important;cursor:pointer!important;position:relative!important;z-index:2!important;flex:0 0 auto!important"
+      : `all:initial!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;box-sizing:border-box!important;height:32px!important;min-width:44px!important;margin:0 4px 0 ${actions ? "4px" : "auto"}!important;padding:0 10px!important;border:1px solid currentColor!important;border-radius:16px!important;color:inherit!important;background:transparent!important;font:600 12px/16px system-ui!important;white-space:nowrap!important;cursor:pointer!important;position:relative!important;z-index:2!important;flex:0 0 auto!important;touch-action:manipulation!important;-webkit-tap-highlight-color:transparent!important`;
     setState(button, name, pending.has(name) ? "pending" : muted.has(name) ? "muted" : "idle");
     // Keep a tap from opening the post. A single click handler also supports keyboards.
     for (const type of ["pointerdown", "pointerup"]) {
@@ -1246,11 +1268,11 @@
       if (postSubreddit(post) !== name) { schedule(); return; }
       void mute(name, post);
     });
+    if (actions) { actions.prepend(button); return; }
+    if (inline) { inline.append(button); return; }
     row.append(button);
     // Reddit renders post content through named slots; unslotted elements can disappear.
-    // A separate credit-bar item avoids squeezing the mobile header's links and menu.
     if (post.matches("shreddit-post")) {
-      const credit = [...post.children].find(el => el.getAttribute("slot") === "credit-bar");
       const title = [...post.children].find(el => el.getAttribute("slot") === "title");
       if (credit) {
         row.setAttribute("slot", "credit-bar"); credit.after(row);
