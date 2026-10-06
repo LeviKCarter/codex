@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Reddit Quick Mute — Mobile
 // @namespace    levi.hbr.quick-mute.mobile
-// @version      1.1.3
+// @version      1.1.4
 // @updateURL    https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Reddit-Quick-Mute-Mobile.user.js
 // @downloadURL  https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Reddit-Quick-Mute-Mobile.user.js
 // @description  Mute and immediately hide subreddits; restore your PC extension's downvote-to-block and blocked-author hiding.
@@ -15,7 +15,7 @@
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
 // @noframes
-// @releaseHash  d33b426f0d20645d03b3258a9b80c434b84888c4a8ec4c9d6c2a783ba8444c8f
+// @releaseHash  2f856963afd6fb77beebc3a6c38842aa9ae9fb5d518c74f1aca3e3c9243aaac2
 // ==/UserScript==
 
 (() => {
