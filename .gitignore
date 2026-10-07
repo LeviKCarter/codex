@@ -14,3 +14,9 @@
 !skills/
 !skills/ship/
 !skills/ship/**
+# Userscripts published from this repo, each opted in by name: any other folder or file under userscripts/ (the
+# PC's local block-filter extension source, for one) stays ignored.
+!userscripts/
+!userscripts/AGENTS.md
+!userscripts/Reddit-Quick-Mute-Mobile.user.js
+!userscripts/Uber-Trip-History.user.js
