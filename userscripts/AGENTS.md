@@ -33,7 +33,9 @@ Ops keeps the trips in `uber-trips.json` (`app/uberTrips.ts`, `api/uber-trips` i
   2026-10-06 Uber's bot check answered 403 with a challenge after about 35 requests at three a second, and clearing
   it is Levi's. Do not shorten the gaps, raise the caps or add retries.
 - It runs by itself at most once every six hours, 8 s after a drivers.uber.com page loads or when the tab comes back
-  into view; a run cut short by leaving the page does not count, so the next page carries on. One tab pulls at a
+  into view. A run cut short by leaving the page before it asked Uber anything does not count, so the next page
+  carries on; once it has asked Uber it counts, and the weeks it did not hand over come in the next run, six hours
+  on (without that, short page visits could ask Uber the same page over and over). One tab pulls at a
   time: a lock in Tampermonkey storage with a 15 s heartbeat, given up after 3 minutes without one (a hidden tab's
   timers can slow to one a minute). Tampermonkey's menu has "Pull Uber trips now" (runs whatever the clock says)
   and "Stop" (also stops a run in another tab). A click on the status line at the bottom left pauses and resumes; a

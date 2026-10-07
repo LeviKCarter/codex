@@ -313,7 +313,7 @@
     }
     if (answer.status === 200 && json && typeof json === "object" && json.ok === true) return json;
     if (answer.status !== 200 || (json && typeof json.error === "string")) {
-      const said = json && typeof json.error === "string" ? `: ${clip(json.error)}` : "";
+      const said = json && typeof json.error === "string" ? `: ${clip(json.error).replace(/[.!?]+$/, "")}` : "";
       throw new Problem(`Pulse: the PC answered HTTP ${answer.status}${said}.${after}`);
     }
     throw new Problem(`Pulse: the PC's answer wasn't one this reads. Pulse Ops on ${PC_LABEL} may need its newer version.${after}`);
@@ -388,6 +388,7 @@
     const controller = new AbortController();
     job.abort = () => controller.abort();
     const timer = setTimeout(() => controller.abort(), UBER_TIMEOUT_MS);
+    job.pages += 1; // counted as it goes out: a request cut off by leaving the page still reached Uber
     let status = 0;
     let text = null;
     try {
@@ -408,7 +409,6 @@
     } finally {
       clearTimeout(timer);
       job.abort = null;
-      job.pages += 1;
       job.lastAt = Date.now();
       GM_setValue(KEY.uberAt, job.lastAt);
     }
@@ -484,7 +484,8 @@
     for (let index = 0; index < weeks.length; index += 1) {
       if (job.pages >= PAGES_PER_RUN) {
         forgetRefusal();
-        return `Pulse: ${weeksWord(index)} in this time${sentPart(job)}; the other ${weeksWord(weeks.length - index)} come next time.`;
+        const rest = weeks.length - index;
+        return `Pulse: ${weeksWord(index)} in this time${sentPart(job)}; ${rest} more ${rest === 1 ? "week comes" : "weeks come"} next time.`;
       }
       const week = weeks[index];
       job.week = week;
@@ -533,7 +534,9 @@
         else if (error.why === "paused") {
           end(job, `Pulse: paused for half an hour, so it stopped${sentPart(job)}. It carries on next time you open the driver site, after ${clock(Date.now() + RUN_EVERY_MS)}.`, false);
         }
-        else if (error.why !== "page") end(job, `Pulse: stopped${sentPart(job)}.`, false);
+        // Left the page: nothing to say, and a page back from the back/forward cache must not keep the old progress.
+        else if (error.why === "page") hide();
+        else end(job, `Pulse: stopped${sentPart(job)}.`, false);
       } else if (error instanceof Problem) {
         end(job, error.message, true);
       } else {
@@ -573,11 +576,12 @@
     if (!current && due()) run(false);
   }
 
-  // Leaving the page mid-run: let go of the lock now, and do not count the run, so the next page carries on.
+  // Leaving the page mid-run lets go of the lock now. A run cut before it asked Uber anything does not count, so the
+  // next page carries on; once Uber was asked it does, so leaving pages cannot ask Uber the same page over and over.
   window.addEventListener("pagehide", () => {
     const job = current;
     if (!job || job.ended) return;
-    const cut = job.started && !job.stopped;
+    const cut = job.started && !job.stopped && !job.pages;
     if (!job.stopped) job.stopped = "page";
     if (job.abort) job.abort();
     clearInterval(job.beat);
@@ -587,6 +591,11 @@
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") maybeRun();
+  });
+
+  // Back from the back/forward cache: the run cut by leaving settles within a few seconds, then one starts if it is due.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) setTimeout(maybeRun, START_DELAY_MS);
   });
 
   GM_registerMenuCommand("Pull Uber trips now", () => { run(true); });
