@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pulse Ops — Uber trip history
 // @namespace    levi.pulseops.uber-history
-// @version      1.0.1
+// @version      1.1.0
 // @updateURL    https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @downloadURL  https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @description  Hands the trips on Uber's driver site (pay, tip, miles, minutes) to Pulse Ops on this PC, one pay week at a time and slowly, for the weeks Pulse Ops still lacks.
@@ -21,11 +21,14 @@
 // asks the PC which pay weeks it still lacks, reads each from the feed the site's own Activity page uses, and hands the
 // rows to the PC as Uber gave them. Uber's rows go to localhost:3000 and nowhere else.
 // On 2026-10-06 Uber's bot check answered 403 after about 35 requests at three a second. So: one request at a time,
-// 4 to 8 s apart, and the whole run stops at the first answer that is not plain data. Nothing is asked again in that
-// run; the next run by itself comes six hours later at the soonest ("Pull Uber trips now" in the menu is his own call).
+// 30 to 60 s apart, and the whole run stops at the first answer that is not plain data. Nothing is asked again in
+// that run; the next run by itself comes six hours later at the soonest ("Pull Uber trips now" in the menu is his own
+// call). Up to 1.0.1 a run asked 4 to 8 s apart, stopped at a hundred pages and waited six hours for its next
+// hundred. Since 1.1.0 (Levi, 2026-10-08: "just do less per second") it asks far less often and goes on until every
+// week the PC listed is in.
 // Chrome puts a background tab to sleep partway through a run (it did, 15 minutes into the first one, on 2026-10-07),
-// so the week being read is kept after every page and a run that was cut is carried on, within the same hundred
-// pages, by the next page or by any driver-site tab still open.
+// so the week being read is kept after every page and a run that was cut is carried on by the next page or by any
+// driver-site tab still open.
 
 (() => {
   "use strict";
@@ -38,19 +41,22 @@
 
   const RUN_EVERY_MS = 6 * 60 * 60 * 1000; // a run by itself at most this often
   const START_DELAY_MS = 8000; // after the page loads, so the site's own requests go first
-  const GAP_MIN_MS = 4000; // between Uber requests: 4 s plus up to 4 s more
-  const GAP_SPREAD_MS = 4000;
+  // Between Uber requests: 30 s plus up to 30 s more. A run has no stop of its own any more, so this gap is all
+  // that holds it back: slower than any run before it (4 to 8 s by the clock, about 30 s in a hidden tab).
+  const GAP_MIN_MS = 30000;
+  const GAP_SPREAD_MS = 30000;
   // Only a stop for a feed that never ends: a week that reaches it is not handed over at all, since handed over cut
   // short the PC would keep it as read and never ask for its other trips. It was 40, which his busiest weeks look
   // set to pass: a week of middling size was at its 25th page or later (ten to fifteen rows to a page) when
   // Chrome cut the first run, and his busiest week had twice its trips.
   const PAGES_PER_WEEK = 100;
-  // Looked at before every page: a run that has had its pages stops there, in the middle of a week or not, and the
-  // next run picks that week up at its place. (Up to 1.0.0 a run finished the week it was in, 139 pages at most.)
-  const PAGES_PER_RUN = 100;
   const RECHECK_MS = 60 * 1000; // a tab left open asks itself this often whether a run is due
   const UBER_TIMEOUT_MS = 30000;
   const PC_TIMEOUT_MS = 30000;
+  // Pulse Ops restarts at every deploy and is back within seconds. A request it does not answer at all is sent again
+  // this often, this many times, before the run gives up; sending it again asks Uber nothing.
+  const PC_RETRY_MS = 30000;
+  const PC_RETRIES = 5;
   const LOCK_BEAT_MS = 15000;
   // A hidden tab's timers can slow to one a minute, so a lock is given up only after three minutes with no beat.
   const LOCK_STALE_MS = 3 * 60 * 1000;
@@ -161,15 +167,15 @@
   // ---------- a run that was cut, and the place in its week ----------
 
   // Chrome puts a background tab to sleep with no word to the page, and a run can be cut by leaving the page too.
-  // Such a run is still open: the next page (or a driver-site tab still open) carries it on with the pages it has
-  // already asked counted, so a cut neither costs six hours nor buys a second hundred pages. Null once it has ended
-  // by itself, was stopped or paused by him, or has had its pages; and null when it was cut with a page asked and
-  // no answer seen, since that answer may have been Uber's check. The next run then waits its six hours.
+  // Such a run is still open: the next page (or a driver-site tab still open) carries it on, so a cut does not cost
+  // six hours. Null once it has ended by itself or was stopped or paused by him; and null when it was cut with a
+  // page asked and no answer seen, since that answer may have been Uber's check. The next run then waits its six
+  // hours.
   function openRun() {
     const record = runRecord();
     if (!record || record.closed === true || record.paused === true) return null;
     const pages = Number(record.pages);
-    if (!Number.isInteger(pages) || pages < 0 || pages >= PAGES_PER_RUN) return null;
+    if (!Number.isInteger(pages) || pages < 0) return null;
     return askedAt() > stamp(KEY.uberAt) ? null : { pages };
   }
 
@@ -398,7 +404,14 @@
 
   async function askPC(job, method, path, body, where) {
     stopCheck(job);
-    const answer = await toPC(job, method, path, body);
+    let answer = await toPC(job, method, path, body);
+    // No answer at all: the PC is restarting, most likely, so the same request goes again a few times before the
+    // run gives up. Rows that did get in the first time are kept once (the PC knows a trip by Uber's id for it).
+    for (let again = 0; !answer.status && !job.stopped && again < PC_RETRIES; again += 1) {
+      show(`Pulse: can't reach the PC (${PC_LABEL}), trying again…`);
+      await wait(job, PC_RETRY_MS);
+      answer = await toPC(job, method, path, body);
+    }
     if (!answer.status && job.stopped) throw new Stopped(job.stopped);
     const after = where ? ` Stopped at the week of ${weekLabel(where.start)}${sentPart(job)}.` : "";
     if (!answer.status) throw new Problem(`Pulse: can't reach the PC (${PC_LABEL}).${after}`);
@@ -553,7 +566,8 @@
   }
 
   // One pay week, every page of it, each row once, from the place kept for it if a run stopped partway through.
-  // Null when the run has had its pages before the week's end: the place is kept, and the next run goes on from it.
+  // Null when the week, read again once in this run already, would have to be read again: the run ends there, and
+  // the next reads this week first.
   async function readWeek(job, week, index, count) {
     const place = placeIn(week);
     if (place && place.whole) return place.rows; // read to its end already: only the hand-over is left
@@ -572,8 +586,8 @@
     let old = cursor !== null;
     let gained = 0; // rows read since the cursor in hand stopped being a fresh one
     let gotBy = 0; // when the request that got the cursor in hand went out; 0 for a kept place's
+    let again = false; // the week has been read again from its first page in this run
     for (let page = first; page <= PAGES_PER_WEEK; page += 1) {
-      if (job.pages >= PAGES_PER_RUN) return null;
       progress(job, week, page, index, count);
       let data;
       try {
@@ -605,11 +619,14 @@
       if (!data.more || !key || cursors.has(key) || (data.activities.length && !fresh)) {
         if (old && !gained) {
           // Over without one new row from a cursor that was not fresh. A week handed over is kept as read by the
-          // PC, so this one is read again from its first page, and has to come to no fewer rows than it had: in
-          // this run if it has the pages left for that, else in the next, which reads this week first.
+          // PC, so this one is read again from its first page, and has to come to no fewer rows than it had: once
+          // in this run, and if it ends the same way again, in the next, which reads this week first. A run has no
+          // other stop of its own, and a tab Chrome keeps holding back must not have one week asked of Uber over
+          // and over.
           least = Math.max(least, rows.length);
           keepPlace(week, [], null, [], 0, false, least);
-          if (PAGES_PER_RUN - job.pages < page) return null;
+          if (again) return null;
+          again = true;
           rows = [];
           ids.clear();
           cursors.clear();
@@ -768,10 +785,10 @@
   }
 
   // Leaving the page mid-run lets go of the lock now. A run cut before it asked Uber anything does not count, so the
-  // next page starts it afresh. Once Uber was asked, the run stays open with its pages counted and its place in the
-  // week kept, and the next page carries it on from there: leaving pages cannot get more than a run's pages inside
-  // six hours. A page left while its request was still out is another matter: its answer was never seen, so that
-  // run is not carried on (openRun) and the next waits its six hours.
+  // next page starts it afresh. Once Uber was asked, the run stays open with its place in the week kept, and the
+  // next page carries it on from there, no sooner after its last request than the gap between any two (pace). A
+  // page left while its request was still out is another matter: its answer was never seen, so that run is not
+  // carried on (openRun) and the next waits its six hours.
   window.addEventListener("pagehide", () => {
     const job = current;
     if (!job || job.ended) return;
