@@ -29,7 +29,7 @@ Produce a proof table: check | command | exit code | result. If anything is red 
 - Create or switch to the branch. Merge the latest base branch in first; in an app-made worktree, use the ccd_host `sync_with_base_branch` tool instead of merging by hand.
 - Stage files explicitly, never with `git add -A` when step 1 found things to exclude. Write a commit message that explains why, not just what, with the attribution trailer from the system reminder.
 - Push to the right remote. Check `git remote -v`, because it isn't always `origin` (LeviOps uses `github`).
-- Open the PR with `gh pr create`. The body covers what changed, why, and the proof table, and ends with the PR attribution line. Then **turn on Auto-fix right away** (ccd_pr set_monitor, auto_fix + address_comments) without asking.
+- Open the PR with `gh pr create`. The body covers what changed, why, and the proof table, and ends with the PR attribution line. Leave the app's Auto-fix monitor off (Levi, 2026-10-08: it is not going to work); don't turn it on or offer it.
 
 ## 4. Watch CI to green
 - Use the ccd_pr tools to read status; don't poll gh in a loop. If a check fails, read the log, then either fix and push or prove it's a pre-existing flake (the same failure shows on `main`).
