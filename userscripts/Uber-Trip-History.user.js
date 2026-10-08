@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pulse Ops — Uber trip history
 // @namespace    levi.pulseops.uber-history
-// @version      1.0.0
+// @version      1.0.1
 // @updateURL    https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @downloadURL  https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @description  Hands the trips on Uber's driver site (pay, tip, miles, minutes) to Pulse Ops on this PC, one pay week at a time and slowly, for the weeks Pulse Ops still lacks.
@@ -23,6 +23,9 @@
 // On 2026-10-06 Uber's bot check answered 403 after about 35 requests at three a second. So: one request at a time,
 // 4 to 8 s apart, and the whole run stops at the first answer that is not plain data. Nothing is asked again in that
 // run; the next run by itself comes six hours later at the soonest ("Pull Uber trips now" in the menu is his own call).
+// Chrome puts a background tab to sleep partway through a run (it did, 15 minutes into the first one, on 2026-10-07),
+// so the week being read is kept after every page and a run that was cut is carried on, within the same hundred
+// pages, by the next page or by any driver-site tab still open.
 
 (() => {
   "use strict";
@@ -37,8 +40,15 @@
   const START_DELAY_MS = 8000; // after the page loads, so the site's own requests go first
   const GAP_MIN_MS = 4000; // between Uber requests: 4 s plus up to 4 s more
   const GAP_SPREAD_MS = 4000;
-  const PAGES_PER_WEEK = 40;
-  const PAGES_PER_RUN = 100; // checked between weeks; the rest wait for the next run
+  // Only a stop for a feed that never ends: a week that reaches it is not handed over at all, since handed over cut
+  // short the PC would keep it as read and never ask for its other trips. It was 40, which his busiest weeks look
+  // set to pass: a week of middling size was at its 25th page or later (ten to fifteen rows to a page) when
+  // Chrome cut the first run, and his busiest week had twice its trips.
+  const PAGES_PER_WEEK = 100;
+  // Looked at before every page: a run that has had its pages stops there, in the middle of a week or not, and the
+  // next run picks that week up at its place. (Up to 1.0.0 a run finished the week it was in, 139 pages at most.)
+  const PAGES_PER_RUN = 100;
+  const RECHECK_MS = 60 * 1000; // a tab left open asks itself this often whether a run is due
   const UBER_TIMEOUT_MS = 30000;
   const PC_TIMEOUT_MS = 30000;
   const LOCK_BEAT_MS = 15000;
@@ -56,8 +66,12 @@
     lastRun: "lastRun", // when a run last started or ended
     lock: "lock", // { id, beat }: the tab that is pulling
     stop: "stopAt", // a Stop given in a tab that is not the one pulling
-    uberAt: "uberLastAt", // when the last Uber request ended, so the gap holds across runs and tabs
-    refused: "uberRefused" // { at, status, week }: the last time Uber stopped a run
+    uberAt: "uberLastAt", // when Uber last answered a request, so the gap holds across runs and tabs
+    refused: "uberRefused", // { at, status, week }: the last time Uber stopped a run
+    // The run's record. { pages, at, paused } while it has not ended by itself: the pages it has asked Uber for and
+    // when it asked the last. { closed, at } once it is over.
+    open: "openRun",
+    place: "weekPlace" // { start, end, rows, cursor, cursors, pages, whole, least }: the one week being read
   };
 
   const TAB = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
@@ -118,10 +132,88 @@
     GM_setValue(KEY.lock, { id: TAB, beat: Date.now() });
   }
 
+  // The record of the run: open, paused or closed. It is kept when the run is over, for `at`.
+  function runRecord() {
+    const open = read(KEY.open, null);
+    return open && typeof open === "object" ? open : null;
+  }
+
+  // When Uber was last asked for a page, answered or not, by this run or the one before.
+  function askedAt() {
+    const record = runRecord();
+    return (record && Number(record.at)) || 0;
+  }
+
+  // The run is over. When it last asked Uber stays on record: the gap before the next request, and the six hours
+  // to the next run by itself, count from there.
+  function closeRun() {
+    GM_setValue(KEY.open, { closed: true, at: askedAt() });
+  }
+
+  // Six hours from when a run last started or ended, or from the last page asked of Uber if that is later: a run
+  // that was cut never ended, and its six hours count from its last page, not from when it began.
   function due() {
-    const last = stamp(KEY.lastRun);
+    const last = Math.max(stamp(KEY.lastRun), stamp(KEY.uberAt), askedAt());
     const now = Date.now();
     return last > now || now - last >= RUN_EVERY_MS;
+  }
+
+  // ---------- a run that was cut, and the place in its week ----------
+
+  // Chrome puts a background tab to sleep with no word to the page, and a run can be cut by leaving the page too.
+  // Such a run is still open: the next page (or a driver-site tab still open) carries it on with the pages it has
+  // already asked counted, so a cut neither costs six hours nor buys a second hundred pages. Null once it has ended
+  // by itself, was stopped or paused by him, or has had its pages; and null when it was cut with a page asked and
+  // no answer seen, since that answer may have been Uber's check. The next run then waits its six hours.
+  function openRun() {
+    const record = runRecord();
+    if (!record || record.closed === true || record.paused === true) return null;
+    const pages = Number(record.pages);
+    if (!Number.isInteger(pages) || pages < 0 || pages >= PAGES_PER_RUN) return null;
+    return askedAt() > stamp(KEY.uberAt) ? null : { pages };
+  }
+
+  // `asking`: a page is going out now.
+  function noteOpen(job, asking) {
+    if (asking) job.askedAt = Date.now();
+    // Not kept (storage full, say): the run goes on, and cut it waits its six hours as it used to.
+    try { GM_setValue(KEY.open, { pages: job.pages, at: job.askedAt }); } catch { /* see above */ }
+  }
+
+  // The rows of a week read so far and the cursor for its next page, kept after every page so a cut run does not ask
+  // Uber for the same pages again; `whole` once the week was read to its end, with only its hand-over left to do.
+  // Uber's cursor is two ten-digit numbers with a bar between them (seen 2026-10-07), which reads as two times in
+  // seconds and not as a ticket that runs out; readWeek does not lean on that. `least`: how many rows an earlier
+  // read of the week had, when that read was not trusted and the week is being read again; a place with no pages
+  // says only that. Null for another week's place, or one this can't read.
+  function placeIn(week) {
+    const place = read(KEY.place, null);
+    if (!place || typeof place !== "object" || place.start !== week.start || place.end !== week.end) return null;
+    const pages = Number(place.pages);
+    const least = Number.isInteger(place.least) && place.least > 0 ? place.least : 0;
+    if (!Array.isArray(place.rows) || !Array.isArray(place.cursors) || !Number.isInteger(pages) || pages < 0) return null;
+    if (!pages) return least ? { rows: [], cursor: null, cursors: [], pages: 0, whole: false, least } : null;
+    const whole = place.whole === true;
+    if (!whole && (place.cursor === null || place.cursor === undefined || place.cursor === "")) return null;
+    return {
+      rows: place.rows.filter((row) => row && typeof row === "object"),
+      cursor: whole ? null : place.cursor,
+      cursors: place.cursors.filter((key) => typeof key === "string"),
+      pages,
+      whole,
+      least
+    };
+  }
+
+  function keepPlace(week, rows, cursor, cursors, pages, whole, least) {
+    // Not kept: the run goes on, and cut it starts this week over.
+    try { GM_setValue(KEY.place, { start: week.start, end: week.end, rows, cursor, cursors, pages, whole, least }); } catch { /* see above */ }
+  }
+
+  // That week's place only; with no week, whatever place is kept.
+  function forgetPlace(week) {
+    const place = read(KEY.place, null);
+    if (place && (!week || (place.start === week.start && place.end === week.end))) GM_setValue(KEY.place, null);
   }
 
   // ---------- waiting, pausing and stopping ----------
@@ -132,6 +224,8 @@
     if (!job.stopped) {
       if (stamp(KEY.stop) > job.startedAt) job.stopped = "user";
       else if (job.locked && !ownsLock()) job.stopped = "lost";
+      // Uber stopped the run in a tab that had lost it to this one, and only now got its answer.
+      else if (Number((read(KEY.refused, null) || {}).at) > job.startedAt) job.stopped = "refused";
     }
     if (job.stopped) throw new Stopped(job.stopped);
   }
@@ -155,9 +249,10 @@
     }
   }
 
-  // The gap runs from the end of the last Uber request, this run's or any tab's.
+  // The gap runs from the end of the last Uber request, this run's or any tab's, or from when it went out if its
+  // answer was never seen.
   async function pace(job) {
-    const last = Math.max(job.lastAt, Math.min(stamp(KEY.uberAt), Date.now()));
+    const last = Math.max(job.lastAt, Math.min(Math.max(stamp(KEY.uberAt), askedAt()), Date.now()));
     if (last) await wait(job, last + GAP_MIN_MS + Math.random() * GAP_SPREAD_MS - Date.now());
   }
 
@@ -255,6 +350,10 @@
     if (pulling(current)) {
       paused = !paused;
       pausedAt = Date.now();
+      // A paused run is not open: if its tab is put to sleep or its page left while it waits, nothing carries it on.
+      // (When it last asked Uber for a page stays on record, for the six hours to count from.)
+      if (paused) GM_setValue(KEY.open, { pages: current.pages, at: current.askedAt, paused: true });
+      else noteOpen(current, false);
       render();
     } else {
       hide();
@@ -372,14 +471,22 @@
   function uberStop(week, status, kind, said) {
     const at = Date.now();
     GM_setValue(KEY.refused, { at, status, week: week.start });
+    // The run is over for every tab, whichever of them has it by now: none carries it on, and one that is pulling
+    // finds the stop at its next check.
+    closeRun();
     const where = `the week of ${weekLabel(week.start)}`;
     const lead = kind === "check" ? `Uber's check stopped it at ${where} (HTTP ${status}).`
       : kind === "status" ? `Uber answered HTTP ${status} at ${where}, so it stopped.`
       : kind === "notjson" ? `Uber's answer at ${where} wasn't data (its check, or signed out), so it stopped.`
       : kind === "said" ? (said ? `Uber said "${said}" at ${where}, so it stopped.` : `Uber turned down ${where}, so it stopped.`)
       : kind === "shape" ? `Uber's answer at ${where} wasn't in the shape this reads, so it stopped.`
+      : kind === "fewer" ? `Uber now gives fewer trips for ${where} than it gave before, so that week was not handed to the PC and it stopped.`
       : `couldn't reach Uber at ${where}, so it stopped.`;
-    return new Problem(`Pulse: ${lead} It carries on next time you open the driver site, after ${clock(at + RUN_EVERY_MS)}.`);
+    const problem = new Problem(`Pulse: ${lead} It carries on next time you open the driver site, after ${clock(at + RUN_EVERY_MS)}.`);
+    // An answer that is about the request itself, which a kept cursor Uber no longer takes would get. Its check
+    // (403, 429), a page that is not data and a lost connection say nothing about the cursor.
+    problem.place = kind === "status" || kind === "said" || kind === "shape";
+    return problem;
   }
 
   async function feedPage(job, week, cursor) {
@@ -389,6 +496,7 @@
     job.abort = () => controller.abort();
     const timer = setTimeout(() => controller.abort(), UBER_TIMEOUT_MS);
     job.pages += 1; // counted as it goes out: a request cut off by leaving the page still reached Uber
+    noteOpen(job, true);
     let status = 0;
     let text = null;
     try {
@@ -410,7 +518,9 @@
       clearTimeout(timer);
       job.abort = null;
       job.lastAt = Date.now();
-      GM_setValue(KEY.uberAt, job.lastAt);
+      // Only an answer counts here. A request cut off with none (the page left, or no connection) stays as asked
+      // and not answered in the open run, which is then not carried on.
+      if (status) GM_setValue(KEY.uberAt, job.lastAt);
     }
     if (job.stopped) throw new Stopped(job.stopped);
     if (status === 403 || status === 429) throw uberStop(week, status, "check");
@@ -427,6 +537,9 @@
     const activities = data.activities == null ? [] : data.activities;
     if (!Array.isArray(activities)) throw uberStop(week, status, "shape");
     const pagination = data.pagination && typeof data.pagination === "object" ? data.pagination : {};
+    // A tab Chrome held back may wake with this answer after another tab took the run over: its rows and place are
+    // that tab's to keep now.
+    stopCheck(job);
     return { activities, more: pagination.hasMoreData === true, next: pagination.nextCursor };
   }
 
@@ -439,36 +552,87 @@
     show(`Pulse: week of ${weekLabel(week.start)}${of}, page ${page}${tail}`);
   }
 
-  // One pay week, every page of it, each row once.
+  // One pay week, every page of it, each row once, from the place kept for it if a run stopped partway through.
+  // Null when the run has had its pages before the week's end: the place is kept, and the next run goes on from it.
   async function readWeek(job, week, index, count) {
-    const rows = [];
-    const ids = new Set();
-    const cursors = new Set();
-    let cursor = null;
-    for (let page = 1; page <= PAGES_PER_WEEK; page += 1) {
+    const place = placeIn(week);
+    if (place && place.whole) return place.rows; // read to its end already: only the hand-over is left
+    let rows = place ? place.rows : [];
+    let least = place ? place.least : 0;
+    // A row with no id of its own is known by all it says, so the same one is not taken twice either.
+    const idOf = (row) => (typeof row.uuid === "string" && row.uuid ? row.uuid : JSON.stringify(row));
+    const ids = new Set(rows.map(idOf));
+    const cursors = new Set(place ? place.cursors : []);
+    let cursor = place ? place.cursor : null;
+    const first = place ? place.pages + 1 : 1;
+    // The week's end is taken on trust only from a cursor Uber has just given. One from a kept place, or one used
+    // more than three minutes after the request that got it went out (a pause, or a tab Chrome held back, also
+    // with that request's answer still on its way), may be answered with nothing, or with rows already read, and
+    // that cannot be told from a true end on an empty last page.
+    let old = cursor !== null;
+    let gained = 0; // rows read since the cursor in hand stopped being a fresh one
+    let gotBy = 0; // when the request that got the cursor in hand went out; 0 for a kept place's
+    for (let page = first; page <= PAGES_PER_WEEK; page += 1) {
+      if (job.pages >= PAGES_PER_RUN) return null;
       progress(job, week, page, index, count);
-      const data = await feedPage(job, week, cursor);
+      let data;
+      try {
+        data = await feedPage(job, week, cursor);
+      } catch (error) {
+        // Uber turned down the first page asked from a kept place: the place may be no good any more, so the week
+        // starts over next time. The run still stops here, as at any answer that is not plain data.
+        if (place && page === first && cursor !== null && error instanceof Problem && error.place && ownsLock()) forgetPlace(week);
+        throw error;
+      }
+      if (cursor !== null && gotBy && job.askedAt - gotBy > LOCK_STALE_MS) {
+        old = true;
+        gained = 0;
+      }
       let fresh = 0;
       for (const row of data.activities) {
         if (!row || typeof row !== "object") continue;
-        const id = typeof row.uuid === "string" ? row.uuid : "";
-        if (id) {
-          if (ids.has(id)) continue;
-          ids.add(id);
-        }
+        const id = idOf(row);
+        if (ids.has(id)) continue;
+        ids.add(id);
         rows.push(row);
         fresh += 1;
       }
-      if (!data.more) break;
-      // A feed that says there is more but hands back no new cursor, or only rows already read, is going round.
+      gained += fresh;
+      // The week is over when Uber says there is no more. A feed that says there is more but hands back no new
+      // cursor, or only rows already read, is going round, and is over too.
       const next = data.next;
-      if (next === null || next === undefined || next === "") break;
-      const key = JSON.stringify(next);
-      if (cursors.has(key) || (data.activities.length && !fresh)) break;
+      const key = next === null || next === undefined || next === "" ? "" : JSON.stringify(next);
+      if (!data.more || !key || cursors.has(key) || (data.activities.length && !fresh)) {
+        if (old && !gained) {
+          // Over without one new row from a cursor that was not fresh. A week handed over is kept as read by the
+          // PC, so this one is read again from its first page, and has to come to no fewer rows than it had: in
+          // this run if it has the pages left for that, else in the next, which reads this week first.
+          least = Math.max(least, rows.length);
+          keepPlace(week, [], null, [], 0, false, least);
+          if (PAGES_PER_RUN - job.pages < page) return null;
+          rows = [];
+          ids.clear();
+          cursors.clear();
+          cursor = null;
+          gotBy = 0;
+          old = false;
+          gained = 0;
+          page = 0;
+          continue;
+        }
+        if (rows.length < least) throw uberStop(week, 200, "fewer");
+        // Kept whole, so a hand-over that fails is tried again next run without asking Uber for anything.
+        keepPlace(week, rows, null, [], page, true, least);
+        return rows;
+      }
       cursors.add(key);
       cursor = next;
+      gotBy = job.askedAt;
+      keepPlace(week, rows, cursor, [...cursors], page, false, least);
     }
-    return rows;
+    // Still more to come at the last page allowed. Its place stays and its week is read first, so each later run
+    // says this again without asking Uber anything, until PAGES_PER_WEEK is looked at.
+    throw new Problem(`Pulse: the week of ${weekLabel(week.start)} runs past ${PAGES_PER_WEEK} pages, so it was not handed to the PC. The script needs a look before it reads any more.`);
   }
 
   // ---------- a run ----------
@@ -481,17 +645,24 @@
   async function pull(job) {
     show("Pulse: asking the PC which weeks it needs…");
     const weeks = weeksFrom(await askPC(job, "GET", "/api/uber-trips?weeks=1"));
+    // There is one place, for one week. That week is read first, ahead of any newer one the PC has listed since, so
+    // no other week's place is written over it. A place for a week the PC no longer asks for is of no use.
+    const kept = read(KEY.place, null);
+    const at = kept && typeof kept === "object" ? weeks.findIndex((week) => week.start === kept.start && week.end === kept.end) : -1;
+    if (kept && at < 0) forgetPlace();
+    if (at > 0) weeks.unshift(...weeks.splice(at, 1));
     for (let index = 0; index < weeks.length; index += 1) {
-      if (job.pages >= PAGES_PER_RUN) {
+      const week = weeks[index];
+      job.week = week;
+      const rows = await readWeek(job, week, index, weeks.length);
+      if (!rows) {
         forgetRefusal();
         const rest = weeks.length - index;
         return `Pulse: ${weeksWord(index)} in this time${sentPart(job)}; ${rest} more ${rest === 1 ? "week comes" : "weeks come"} next time.`;
       }
-      const week = weeks[index];
-      job.week = week;
-      const rows = await readWeek(job, week, index, weeks.length);
       await checkpoint(job);
       await handOver(job, week, rows);
+      forgetPlace(week);
     }
     forgetRefusal();
     if (!weeks.length) return "Pulse: every week is in.";
@@ -511,7 +682,7 @@
     }
     const job = {
       startedAt: Date.now(), stopped: "", locked: false, started: false, ended: false, abort: null, beat: 0,
-      lastAt: 0, pages: 0, sent: 0, added: 0, week: null, prevLast: 0
+      lastAt: 0, pages: 0, sent: 0, added: 0, week: null, prevLast: 0, carried: false, askedAt: 0
     };
     current = job;
     paused = false;
@@ -522,15 +693,24 @@
         if (forced) end(job, "Pulse: another driver-site tab is pulling already.", false);
         return;
       }
-      if (!forced && !due()) return; // another tab ran it while this one waited for the lock
+      // "Pull Uber trips now" and a run that is due start afresh; otherwise a run that was cut is carried on.
+      const open = forced || due() ? null : openRun();
+      if (!forced && !open && !due()) return; // another tab ran it while this one waited for the lock
       job.prevLast = stamp(KEY.lastRun);
       job.started = true;
-      GM_setValue(KEY.lastRun, Date.now());
+      job.carried = !!open;
+      job.pages = open ? open.pages : 0;
+      job.askedAt = askedAt(); // kept through a new run's start too: the gap to its first page counts from there
+      if (!open) GM_setValue(KEY.lastRun, Date.now());
+      noteOpen(job, false);
       job.beat = setInterval(() => beat(job), LOCK_BEAT_MS);
       end(job, await pull(job), false);
     } catch (error) {
       if (error instanceof Stopped) {
         if (error.why === "lost") end(job, `Pulse: another driver-site tab took over${sentPart(job)}.`, false);
+        else if (error.why === "refused") {
+          end(job, `Pulse: Uber stopped this run in another driver-site tab, so it stopped here too${sentPart(job)}. It carries on next time you open the driver site, after ${clock(Date.now() + RUN_EVERY_MS)}.`, true);
+        }
         else if (error.why === "paused") {
           end(job, `Pulse: paused for half an hour, so it stopped${sentPart(job)}. It carries on next time you open the driver site, after ${clock(Date.now() + RUN_EVERY_MS)}.`, false);
         }
@@ -547,8 +727,14 @@
       job.beat = 0;
       job.ended = true;
       job.abort = null;
+      const mine = ownsLock();
       releaseLock(); // only ever this tab's own: it may have written the lock and lost it in the same moment
-      if (job.started && job.stopped !== "page") GM_setValue(KEY.lastRun, Date.now());
+      // A run that ended by itself is over, and the next is six hours on. One cut by leaving the page stays open,
+      // and so does one another tab has taken over, whether or not this tab had noticed: it is that tab's now.
+      if (job.started && job.stopped !== "page") {
+        GM_setValue(KEY.lastRun, Date.now());
+        if (mine) closeRun();
+      }
       if (current === job) current = null;
       paused = false;
       render();
@@ -556,6 +742,13 @@
   }
 
   function stop() {
+    // A run that was cut is still open and would be carried on. Stopped, it is over, whichever tab it was in and
+    // whether that tab is asleep, gone or this one.
+    const record = runRecord();
+    const open = !!record && record.closed !== true;
+    if (open) closeRun();
+    // Stop means not now: the next run by itself is six hours on, also when the one stopped had not begun yet.
+    GM_setValue(KEY.lastRun, Date.now());
     const job = current;
     if (job) {
       if (!job.stopped) job.stopped = "user";
@@ -563,29 +756,33 @@
       show("Pulse: stopping…");
       return;
     }
+    // Left for any tab that is pulling to find, also one Chrome is holding back, whose lock has gone stale by now.
+    GM_setValue(KEY.stop, Date.now());
     const lock = read(KEY.lock, null);
-    if (lockFresh(lock) && lock.id !== TAB) {
-      GM_setValue(KEY.stop, Date.now());
-      note("Pulse: asked the driver-site tab that is pulling to stop.");
-      return;
-    }
-    note("Pulse: nothing is pulling right now.");
+    if (lockFresh(lock) && lock.id !== TAB) note("Pulse: stopped. A driver-site tab that is pulling stops within a few seconds.");
+    else note(open ? "Pulse: stopped the run that was cut." : "Pulse: nothing is pulling right now.");
   }
 
   function maybeRun() {
-    if (!current && due()) run(false);
+    if (!current && (due() || openRun())) run(false);
   }
 
   // Leaving the page mid-run lets go of the lock now. A run cut before it asked Uber anything does not count, so the
-  // next page carries on; once Uber was asked it does, so leaving pages cannot ask Uber the same page over and over.
+  // next page starts it afresh. Once Uber was asked, the run stays open with its pages counted and its place in the
+  // week kept, and the next page carries it on from there: leaving pages cannot get more than a run's pages inside
+  // six hours. A page left while its request was still out is another matter: its answer was never seen, so that
+  // run is not carried on (openRun) and the next waits its six hours.
   window.addEventListener("pagehide", () => {
     const job = current;
     if (!job || job.ended) return;
-    const cut = job.started && !job.stopped && !job.pages;
+    const cut = job.started && !job.stopped && !job.carried && !job.pages;
     if (!job.stopped) job.stopped = "page";
     if (job.abort) job.abort();
     clearInterval(job.beat);
-    if (cut) GM_setValue(KEY.lastRun, job.prevLast);
+    if (cut) {
+      GM_setValue(KEY.lastRun, job.prevLast);
+      closeRun();
+    }
     releaseLock();
   });
 
@@ -602,4 +799,12 @@
   GM_registerMenuCommand("Stop", stop);
 
   setTimeout(maybeRun, START_DELAY_MS);
+  // A tab left open carries on a run that was cut, and starts the next run when it is due, with no page load and
+  // nobody looking at it. Not once Uber has stopped a run: the next then waits for the site to be opened or looked
+  // at, as the line says, so Uber's check is not met again and again with nobody there to clear it.
+  setInterval(() => {
+    if (current) return;
+    const refused = Number((read(KEY.refused, null) || {}).at) > 0;
+    if (due() ? !refused : openRun()) run(false);
+  }, RECHECK_MS);
 })();
