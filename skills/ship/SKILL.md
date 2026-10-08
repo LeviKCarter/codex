@@ -1,6 +1,6 @@
 ---
 name: ship
-description: Prove the current uncommitted work, then commit, push, open the PR, watch CI to green, and verify the change live. Use when the user types /ship or says "ship it" / "commit and push it all". `/ship check` runs only the proof gate and does not commit.
+description: Prove the current uncommitted work, then commit, push, open the PR, merge it by hand, and verify the change live. Use when the user types /ship or says "ship it" / "commit and push it all". `/ship check` runs only the proof gate and does not commit.
 ---
 
 # /ship: prove, ship, then confirm it's live
@@ -31,21 +31,21 @@ Produce a proof table: check | command | exit code | result. If anything is red 
 - Push to the right remote. Check `git remote -v`, because it isn't always `origin` (LeviOps uses `github`).
 - Open the PR with `gh pr create`. The body covers what changed, why, and the proof table, and ends with the PR attribution line. Leave the app's Auto-fix monitor off (Levi, 2026-10-08: it is not going to work); don't turn it on or offer it.
 
-## 4. Watch CI to green
-- Use the ccd_pr tools to read status; don't poll gh in a loop. If a check fails, read the log, then either fix and push or prove it's a pre-existing flake (the same failure shows on `main`).
-- Note whether the repo auto-merges (e.g. a leviops `auto-merge.yml`). If it does, a green PR means it has shipped.
+## 4. Merge by hand
+- Squash-merge the PR yourself as soon as it is open (`gh pr merge --squash`), in every repo (Levi, 2026-10-08: "always auto merge by hand"). The step 2 proof gate is the gate; don't wait for, watch or report GitHub checks or an auto-merge workflow.
+- Follow the repo's own merge notes in memory (e.g. PulseOps: pass `--subject`, never `--delete-branch`, diff against main after the merge).
 
 ## 5. Verify live
 Find how this project deploys (check memory). Verify the real running environment, not the source code. Examples:
 - **LeviOps:** after the merge, run `npm run build` in the app folder, kill the PID on :3000 and let the supervisor respawn it, confirm a 200 from http://127.0.0.1:3000/, and check the changed behavior on the actual page. For sheet or data changes, run `scripts\refresh_snapshot.py` and expect `LIVE_FEED_PUSH_OK`.
 - **Staging/prod web apps:** load the deployed URL and check the specific change (screenshot or response body), not just that the site is up.
-- **If there's no deploy target** (a library, a script): say so plainly. "Merged and green" is then the end state.
+- **If there's no deploy target** (a library, a script): say so plainly. "Merged" is then the end state.
 
 ## 6. Close out
 - File follow-ups for leftovers found along the way: a spawn_task chip, or an issue if the repo uses them.
 - If this project's ship steps held something non-obvious you had to figure out, save it to memory so the next /ship already knows it.
 - Final report, short and plain:
   - **Shipped:** yes/no, PR link, merge commit
-  - **Proof:** the table from step 2 plus CI result
+  - **Proof:** the table from step 2
   - **Live:** what you checked and what you saw
   - **Follow-ups:** a list, or "none"

@@ -13,7 +13,7 @@ The full procedure is the PulseOps `CLAUDE.md`, imported here so it applies to e
 ## 2. Shipping: the `/ship` skill
 
 `/ship` (global: `~/.claude/skills/ship` is a junction to `skills/ship` in this repo's main checkout, so edit it through
-a PR here) proves the change, commits, pushes, opens the PR, watches CI to green and
+a PR here) proves the change, commits, pushes, opens the PR, merges it by hand and
 verifies the change live. `/ship check` runs only the proof gate.
 
 ## 3. UI work: the Impeccable skill and agents
