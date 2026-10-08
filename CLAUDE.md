@@ -56,5 +56,9 @@ report or build on ChatGPT output unverified. Never give it write access, creden
 
 - `auto-merge.yml`: on every non-draft PR, runs type-check, tests, lint and build; squash-merges when green, then dispatches
   the public preview deploy. PRs that change workflow files need main merged in first (or a manual merge by Levi).
+  GitHub has started no Actions job on this account since 2026-10-05 (billing): every run fails in seconds with no
+  runner, so it merges nothing. The session squash-merges its own PR by hand as soon as it is open, its local checks
+  the gate (Levi, 2026-10-08: "always auto merge by hand", "merge it automatically from now on"; `/ship` step 4, and
+  the PulseOps `CLAUDE.md`, "What's automatic").
 - `deploy-public-preview.yml`: deploys the sanitized public preview to Cloudflare Pages on push to main. That is
   separate from the local :3000 deploy; report the two results separately.
