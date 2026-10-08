@@ -3,12 +3,18 @@
 // The script is run whole, as Tampermonkey runs it, in a made-up browser tab: a clock that moves only when a test
 // moves it, a made-up Uber feed (ten rows to a page, a cursor for the next), a made-up Pulse Ops, and one Tampermonkey
 // storage shared by every tab of a test. Nothing here reaches Uber or the PC.
+// `--random=300` runs a random-events pass in place of the tests: that many made-up histories, each with tabs opened,
+// put to sleep, left, held back, paused, Uber and the PC failing, and at the end one tab left open; then it checks
+// that no week was handed over short, every week got in, and Uber was never asked twice within thirty seconds.
+// `--seed=7` starts the histories there (a failure names its seed). Run it before a change to the script ships.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const file = process.argv[2] ?? fileURLToPath(new URL("./Uber-Trip-History.user.js", import.meta.url));
+const args = process.argv.slice(2);
+const flag = (name) => { const arg = args.find((a) => a.startsWith(`--${name}=`)); return arg ? Number(arg.slice(name.length + 3)) : null; };
+const file = args.find((a) => !a.startsWith("--")) ?? fileURLToPath(new URL("./Uber-Trip-History.user.js", import.meta.url));
 const source = readFileSync(file, "utf8");
 
 const SECOND = 1000;
@@ -32,7 +38,8 @@ function makeWorld(weeks) {
     // soft: how an old cursor is answered ("empty", "first" or "nodata"); null is an error, "Invalid cursor".
     // trailing: a week whose rows fill its pages exactly ends on one more page, with nothing on it.
     uber: { rows: new Map(), requests: [], epoch: 0, rule: null, latency: 0, soft: null, trailing: false },
-    pc: { posts: [], tries: 0, pulled: new Set(), latency: 0, rule: null }
+    // down: the PC answers nothing at all, as while it restarts.
+    pc: { posts: [], tries: 0, pulled: new Set(), latency: 0, rule: null, down: false }
   };
   for (const [start, count] of Object.entries(weeks)) world.uber.rows.set(start, rowsOf(start, count));
   return world;
@@ -60,6 +67,7 @@ function uberAnswer(world, request) {
 }
 
 function pcAnswer(world, method, path, body) {
+  if (world.pc.down) return { status: 0, text: "" };
   if (method === "GET" && path === "/api/uber-trips?weeks=1") {
     const weeks = [...world.uber.rows.keys()].filter((start) => !world.pc.pulled.has(start)).sort().reverse()
       .map((start) => ({ start, end: endOf(start), paid: 1, kept: 0 }));
@@ -218,7 +226,7 @@ const SEVEN = ["2026-06-29", "2026-07-06", "2026-07-13", "2026-07-20", "2026-07-
 // One thirty-page week, twelve pages asked and answered, and then the tab is put to sleep.
 async function cutAtTwelve(world) {
   const tab = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   sleep(tab);
   return tab;
 }
@@ -242,34 +250,36 @@ test("short weeks are read newest first and handed over, and the run ends with n
 test("a week longer than forty pages is handed over whole", async () => {
   const world = makeWorld({ "2026-08-10": 550 });
   openTab(world);
-  await advance(world, 15 * MINUTE);
+  await advance(world, HOUR);
   whole(world, "2026-08-10", 550);
   assert.equal(asked(world), 55);
 });
 
-test("a run stops at a hundred pages, in the middle of a week, and the next run picks that week up", async () => {
+test("a run goes on until every week is in, with no stop at a hundred pages, and the next comes six hours on", async () => {
   const world = makeWorld(weeksOf(SEVEN, 300));
-  const tab = openTab(world);
+  openTab(world);
   await advance(world, 3 * HOUR);
-  assert.equal(asked(world), 100, "a hundred pages and no more, though the fourth week is ten pages in");
-  assert.equal(world.pc.posts.length, 3);
-  assert.equal(stored(world, "weekPlace").start, "2026-07-20");
-  assert.equal(stored(world, "weekPlace").pages, 10);
-  assert.equal(runOpen(world), false);
-  assert.match(tab.status() || "gone", /gone|3 weeks in this time; 4 more weeks come next time/);
-  const last = world.uber.requests[99].at;
-  await advance(world, last + 6 * HOUR - MINUTE - world.now);
-  assert.equal(asked(world), 100, "nothing more for six hours");
-  await advance(world, 3 * HOUR);
-  assert.equal(asked(world), 200, "then the tab left open reads a hundred more by itself");
+  assert.equal(asked(world), 210, "seven thirty-page weeks in the one run");
   assert.equal(askedTwice(world), 0);
-  for (const start of SEVEN.slice(1)) whole(world, start, 300);
+  for (const start of SEVEN) whole(world, start, 300);
+  assert.equal(none(stored(world, "weekPlace")), null);
+  assert.equal(runOpen(world), false);
+  const gaps = world.uber.requests.slice(1).map((r, i) => r.at - world.uber.requests[i].at);
+  assert.ok(Math.min(...gaps) >= 30 * SECOND, `closest two requests: ${Math.min(...gaps)} ms`);
+  // A pay week ends meanwhile. Nothing reads it until six hours after the run ended.
+  world.uber.rows.set("2026-08-17", rowsOf("2026-08-17", 30));
+  const ended = stored(world, "lastRun");
+  await advance(world, ended + 6 * HOUR - MINUTE - world.now);
+  assert.equal(asked(world), 210, "nothing more for six hours");
+  await advance(world, 10 * MINUTE);
+  whole(world, "2026-08-17", 30);
+  assert.equal(asked(world), 213, "then the tab left open reads the new week by itself");
 });
 
 test("a week that runs past the page stop is not handed over, and Uber is not asked for it again", async () => {
   const world = makeWorld({ "2026-08-10": 1050 });
   const tab = openTab(world);
-  await advance(world, 30 * MINUTE);
+  await advance(world, 2 * HOUR);
   assert.equal(world.pc.posts.length, 0, "a week cut short is never handed over");
   assert.equal(asked(world), 100);
   assert.match(tab.status(), /runs past 100 pages/);
@@ -291,7 +301,7 @@ test("a run Chrome put to sleep is carried on by the next tab, with no page aske
   assert.equal(stored(world, "openRun").pages, 12, "the run is still open with its pages counted");
   // The sleeping tab's lock is still fresh for three minutes; the new tab waits it out by itself.
   openTab(world);
-  await advance(world, 12 * MINUTE);
+  await advance(world, 25 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 30);
   assert.equal(askedTwice(world), 0);
@@ -301,10 +311,10 @@ test("a run Chrome put to sleep is carried on by the next tab, with no page aske
 test("a run cut by leaving the page mid-week is carried on by the next page", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   const first = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   await leave(first);
   openTab(world);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 20 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 30);
   assert.equal(askedTwice(world), 0);
@@ -313,7 +323,7 @@ test("a run cut by leaving the page mid-week is carried on by the next page", as
 test("a page back from the back/forward cache carries its run on", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   const tab = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   for (const fn of tab.heard.window.pagehide) fn({ persisted: true });
   await settle();
   stall(world, tab, true); // a page in the cache runs nothing
@@ -321,7 +331,7 @@ test("a page back from the back/forward cache carries its run on", async () => {
   assert.equal(asked(world), 12);
   stall(world, tab, false);
   for (const fn of tab.heard.window.pageshow) fn({ persisted: true });
-  await advance(world, 5 * MINUTE);
+  await advance(world, 20 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 30);
 });
@@ -330,14 +340,14 @@ test("a run cut with a page out and no answer seen is not carried on: it waits s
   const world = makeWorld({ "2026-08-10": 300 });
   world.uber.latency = 2 * SECOND;
   const first = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "the twelfth page asked", 100);
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "the twelfth page asked", 100);
   await leave(first); // its answer never reaches the page
   const last = world.uber.requests[11].at;
   assert.equal(stored(world, "weekPlace").pages, 11);
   openTab(world);
   await advance(world, last + 6 * HOUR - MINUTE - world.now);
   assert.equal(asked(world), 12, "short visits cannot have the same page asked over and over");
-  await advance(world, 10 * MINUTE);
+  await advance(world, 25 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 31);
   assert.equal(askedTwice(world), 1, "the page whose answer was never seen is asked once more, six hours on");
@@ -347,7 +357,7 @@ test("the six hours count from the last page asked, also when its answer was nev
   const world = makeWorld({ "2026-08-10": 300 });
   world.uber.latency = 2 * SECOND;
   const tab = openTab(world);
-  await until(world, () => stored(world, "weekPlace")?.pages === 12, 5 * MINUTE, "twelve pages answered", 100);
+  await until(world, () => stored(world, "weekPlace")?.pages === 12, 15 * MINUTE, "twelve pages answered", 100);
   tab.click(); // paused
   await advance(world, 20 * MINUTE);
   tab.click(); // carried on
@@ -365,7 +375,7 @@ test("the six hours count from the last page asked, also when the run was paused
   const world = makeWorld({ "2026-08-10": 300 });
   world.uber.latency = 15 * SECOND;
   const tab = openTab(world);
-  await until(world, () => stored(world, "weekPlace")?.pages === 12, 10 * MINUTE, "twelve pages answered", 100);
+  await until(world, () => stored(world, "weekPlace")?.pages === 12, 20 * MINUTE, "twelve pages answered", 100);
   stall(world, tab, true); // held back for twenty minutes, then let go: its next page goes out at once
   await advance(world, 20 * MINUTE);
   stall(world, tab, false);
@@ -380,7 +390,7 @@ test("the six hours count from the last page asked, also when the run was paused
   assert.ok(asked(world) > 13);
 });
 
-test("a run started from the menu right after a request that got no answer still leaves four seconds after it", async () => {
+test("a run started from the menu right after a request that got no answer still leaves thirty seconds after it", async () => {
   const world = makeWorld({ "2026-08-10": 30 });
   world.random = 0;
   world.uber.rule = (request, count) => (count === 1 ? { fail: true } : null);
@@ -391,92 +401,75 @@ test("a run started from the menu right after a request that got no answer still
   tab.commands["Pull Uber trips now"]();
   await advance(world, MINUTE);
   const gap = world.uber.requests[1].at - world.uber.requests[0].at;
-  assert.ok(gap >= 4 * SECOND, `the new run's first request came ${gap} ms after the one that failed`);
+  assert.ok(gap >= 30 * SECOND, `the new run's first request came ${gap} ms after the one that failed`);
 });
 
-test("a run started from the menu right after a page was cut off still leaves four seconds after it", async () => {
+test("a run started from the menu right after a page was cut off still leaves thirty seconds after it", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   world.uber.latency = 2 * SECOND;
   world.random = 0;
   const first = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "the twelfth page asked", 50);
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "the twelfth page asked", 50);
   await leave(first);
   openTab(world).commands["Pull Uber trips now"]();
   await advance(world, MINUTE);
   const gap = world.uber.requests[12].at - world.uber.requests[11].at;
-  assert.ok(gap >= 4 * SECOND, `the new run's first request came ${gap} ms after the one cut off`);
+  assert.ok(gap >= 30 * SECOND, `the new run's first request came ${gap} ms after the one cut off`);
 });
 
-test("a run that is cut gets no more pages than one that is not, and the next waits six hours from its last page", async () => {
+test("a run that is cut again and again is carried on each time, and reads every week", async () => {
   const world = makeWorld(weeksOf(SEVEN, 300));
   let tab = openTab(world);
   for (const pages of [17, 45, 71, 99]) {
-    await until(world, () => asked(world) === pages, 30 * MINUTE, `${pages} pages asked`);
+    await until(world, () => asked(world) === pages, HOUR, `${pages} pages asked`);
     sleep(tab);
     await advance(world, 4 * MINUTE);
     tab = openTab(world);
   }
-  await advance(world, 3 * HOUR);
-  assert.equal(asked(world), 100, "cut four times, the run still stops at a hundred pages");
+  await advance(world, 2 * HOUR);
+  assert.equal(asked(world), 210, "cut four times, the one run still reads all seven weeks");
   assert.equal(askedTwice(world), 0);
-  assert.equal(world.pc.posts.length, 3);
-  const last = world.uber.requests[99].at;
-  await advance(world, last + 6 * HOUR - MINUTE - world.now);
-  assert.equal(asked(world), 100, "the next run waits six hours");
-  await advance(world, 4 * MINUTE);
-  assert.ok(asked(world) > 100, "and then starts by itself in the tab left open");
+  for (const start of SEVEN) whole(world, start, 300);
+  assert.equal(runOpen(world), false);
 });
 
-test("a run cut with its hundredth page out is not carried on, and the next waits six hours from its last answer", async () => {
-  const world = makeWorld(weeksOf(SEVEN, 300));
-  world.uber.latency = SECOND;
-  const first = openTab(world);
-  await until(world, () => asked(world) === 100, 30 * MINUTE, "the hundredth page asked", 100);
-  sleep(first);
-  assert.equal(stored(world, "openRun").pages, 100);
-  const last = stored(world, "uberLastAt");
-  await advance(world, 5 * MINUTE);
-  openTab(world);
-  await advance(world, last + 6 * HOUR - MINUTE - world.now);
-  assert.equal(asked(world), 100, "nothing is asked until six hours after Uber last answered");
-  await advance(world, 4 * MINUTE);
-  assert.ok(asked(world) > 100, "then the next run starts by itself");
-});
-
-test("six hours after a cut run's last page, the next run starts with its own hundred pages", async () => {
+test("a cut run nobody came back to for six hours is picked up at its place by the next tab", async () => {
   const world = makeWorld(weeksOf(SEVEN, 300));
   const first = openTab(world);
-  await until(world, () => asked(world) === 45, 30 * MINUTE, "45 pages asked");
+  await until(world, () => asked(world) === 45, HOUR, "45 pages asked");
   sleep(first);
   await advance(world, 7 * HOUR);
   assert.equal(asked(world), 45, "with no tab open, nothing runs");
   openTab(world);
-  await advance(world, 2 * HOUR);
-  assert.equal(asked(world), 145);
+  await advance(world, 3 * HOUR);
+  assert.equal(asked(world), 210);
   assert.equal(askedTwice(world), 0);
 });
 
-test("\"Pull Uber trips now\" does not carry a cut run's pages on", async () => {
+test("\"Pull Uber trips now\" after a cut run picks its week up at its place", async () => {
   const world = makeWorld(weeksOf(SEVEN, 300));
   const first = openTab(world);
-  await until(world, () => asked(world) === 45, 30 * MINUTE, "45 pages asked");
+  await until(world, () => asked(world) === 45, HOUR, "45 pages asked");
   sleep(first);
   await advance(world, 4 * MINUTE);
   openTab(world).commands["Pull Uber trips now"]();
-  await advance(world, 2 * HOUR);
-  assert.equal(asked(world), 145);
+  await advance(world, 3 * HOUR);
+  assert.equal(asked(world), 210);
   assert.equal(askedTwice(world), 0);
 });
 
-test("\"Pull Uber trips now\" starts a new run with its own pages", async () => {
-  const world = makeWorld(weeksOf(SEVEN.slice(1), 400));
+test("\"Pull Uber trips now\" starts a run though the last one ended less than six hours ago", async () => {
+  const world = makeWorld({ "2026-08-10": 30 });
   const tab = openTab(world);
-  await advance(world, HOUR);
-  assert.equal(asked(world), 100);
+  await advance(world, 10 * MINUTE);
+  whole(world, "2026-08-10", 30);
+  world.uber.rows.set("2026-08-17", rowsOf("2026-08-17", 30)); // a pay week ends
+  await advance(world, 2 * HOUR);
+  assert.equal(asked(world), 3, "by itself, nothing for six hours");
   tab.commands["Pull Uber trips now"]();
-  await advance(world, HOUR);
-  assert.equal(asked(world), 200);
-  assert.equal(world.pc.posts.length, 5);
+  await advance(world, 10 * MINUTE);
+  whole(world, "2026-08-17", 30);
+  assert.equal(asked(world), 6);
 });
 
 test("a place kept for a week the PC no longer asks for is dropped", async () => {
@@ -501,7 +494,7 @@ for (const soft of ["empty", "first", "nodata"]) {
     world.uber.soft = soft; // and Uber answers it with plain data, not an error
     await advance(world, 4 * MINUTE);
     openTab(world);
-    await advance(world, 6 * MINUTE);
+    await advance(world, 30 * MINUTE);
     whole(world, "2026-08-10", 300);
     assert.equal(asked(world), 12 + 1 + 30);
   });
@@ -511,25 +504,52 @@ test("a carry-on that meets a true empty last page reads the week again, and han
   const world = makeWorld({ "2026-08-10": 20 });
   world.uber.trailing = true; // 10 rows, 10 rows, and a third page with nothing on it
   const first = openTab(world);
-  await until(world, () => asked(world) === 2, MINUTE, "two pages asked");
+  await until(world, () => asked(world) === 2, 3 * MINUTE, "two pages asked");
   sleep(first);
   await advance(world, 4 * MINUTE);
   openTab(world);
-  await advance(world, 2 * MINUTE);
+  await advance(world, 5 * MINUTE);
   whole(world, "2026-08-10", 20);
   assert.equal(asked(world), 2 + 1 + 3);
+});
+
+test("a week that ends untrusted a second time in one run is left for the next run, which reads it first", async () => {
+  const world = makeWorld({ "2026-08-10": 20 });
+  world.uber.trailing = true; // 10 rows, 10 rows, and a third page with nothing on it
+  const first = openTab(world);
+  await until(world, () => asked(world) === 2, 3 * MINUTE, "two pages asked");
+  sleep(first);
+  await advance(world, 4 * MINUTE);
+  const tab = openTab(world);
+  // Carried on: the empty third page from the kept cursor, then the week again from its first page.
+  await until(world, () => asked(world) === 5, 5 * MINUTE, "the week's first two pages read again");
+  stall(world, tab, true); // held back past the three minutes a cursor is trusted for
+  await advance(world, 4 * MINUTE);
+  stall(world, tab, false);
+  await advance(world, 5 * SECOND);
+  assert.equal(asked(world), 6, "the empty last page, from a cursor that waited");
+  assert.match(tab.status(), /0 weeks in this time; 1 more week comes next time/);
+  assert.equal(world.pc.posts.length, 0);
+  assert.equal(runOpen(world), false);
+  assert.equal(stored(world, "weekPlace").least, 20);
+  const ended = stored(world, "lastRun");
+  await advance(world, ended + 6 * HOUR - MINUTE - world.now);
+  assert.equal(asked(world), 6, "the week is not read a third time for six hours");
+  await advance(world, 10 * MINUTE);
+  whole(world, "2026-08-10", 20);
+  assert.equal(asked(world), 6 + 3);
 });
 
 test("a cursor that waited through a twenty-minute pause is not trusted to end the week either", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   const tab = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   tab.click(); // paused
   await advance(world, 20 * MINUTE);
   world.uber.epoch += 1;
   world.uber.soft = "empty";
   tab.click(); // carried on: the cursor in hand is answered with an empty last page
-  await advance(world, 10 * MINUTE);
+  await advance(world, 30 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 12 + 1 + 30);
 });
@@ -545,7 +565,7 @@ test("a cursor whose answer was ten minutes on its way to a held-back tab is not
   world.uber.soft = "nodata";
   world.uber.latency = 150;
   stall(world, tab, false);
-  await advance(world, 15 * MINUTE);
+  await advance(world, 30 * MINUTE);
   whole(world, "2026-08-10", 300);
 });
 
@@ -566,38 +586,67 @@ test("a week read again that comes to fewer rows than it had is not handed over,
   assert.equal(asked(world), 14, "and nothing by itself, as after any stop by Uber");
   world.uber.rule = null;
   visit(tab);
-  await advance(world, 10 * MINUTE);
+  await advance(world, 30 * MINUTE);
   whole(world, "2026-08-10", 300);
 });
 
-test("a week of a hundred requests whose carry-on meets its empty last page still gets in", async () => {
+test("a week of a hundred requests, the last with nothing on it, gets in", async () => {
   // A one-page week, then a week of 99 full pages that ends on a hundredth with nothing on it, then a three-page one.
   const world = makeWorld({ "2026-08-17": 5, "2026-08-10": 990, "2026-08-03": 25 });
   world.uber.trailing = true;
   openTab(world);
-  await advance(world, 30 * HOUR);
+  await advance(world, 2 * HOUR);
   whole(world, "2026-08-17", 5);
   whole(world, "2026-08-10", 990);
   whole(world, "2026-08-03", 25);
-  // 1 + 99, the run's hundred. Then the empty page, which ends that run: too few pages left to read the week again.
-  // Then the week from its first page, all hundred. Then the last week's three.
-  assert.equal(asked(world), 100 + 1 + 100 + 3);
+  assert.equal(asked(world), 1 + 100 + 3, "all in the one run, each page asked once");
 });
 
 test("a hand-over the PC turns down is tried again next run without asking Uber anything", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   world.pc.rule = (tries) => (tries === 1 ? { status: 500, text: JSON.stringify({ ok: false, error: "Could not keep the trips." }) } : null);
   const tab = openTab(world);
-  await advance(world, 10 * MINUTE);
+  await advance(world, 30 * MINUTE);
   assert.equal(asked(world), 30);
   assert.equal(world.pc.posts.length, 0);
   assert.match(tab.status(), /the PC answered HTTP 500/);
+  assert.equal(world.pc.tries, 1, "an answer that says no is not sent again in that run");
   assert.equal(stored(world, "weekPlace").whole, true, "the week read to its end is kept whole");
   await advance(world, 6.5 * HOUR);
   whole(world, "2026-08-10", 300);
   assert.equal(world.pc.tries, 2);
   assert.equal(asked(world), 30, "Uber is asked nothing for a week already read");
   assert.equal(none(stored(world, "weekPlace")), null);
+});
+
+test("a PC that does not answer for a moment, restarting at a deploy, does not end the run", async () => {
+  const world = makeWorld({ "2026-08-03": 30, "2026-08-10": 30 });
+  world.pc.rule = (tries) => (tries <= 2 ? { status: 0, text: "" } : null);
+  const tab = openTab(world);
+  await until(world, () => world.pc.tries === 1, 5 * MINUTE, "the first week's hand-over tried");
+  assert.match(tab.status(), /can't reach the PC \(localhost:3000\), trying again/);
+  await advance(world, 10 * MINUTE);
+  whole(world, "2026-08-10", 30);
+  whole(world, "2026-08-03", 30);
+  assert.equal(world.pc.tries, 4, "the first week's hand-over went three times, the second's once");
+  assert.equal(asked(world), 6, "and Uber was asked for no page twice");
+  assert.equal(runOpen(world), false);
+});
+
+test("a PC that stays out of reach ends the run, and the week read is handed over next run without asking Uber", async () => {
+  const world = makeWorld({ "2026-08-10": 30 });
+  let down = true;
+  world.pc.rule = () => (down ? { status: 0, text: "" } : null);
+  const tab = openTab(world);
+  await advance(world, 10 * MINUTE);
+  assert.equal(world.pc.tries, 6, "sent once, then five times more, half a minute apart");
+  assert.match(tab.status(), /can't reach the PC \(localhost:3000\)\. Stopped at the week of Aug 10\./);
+  assert.equal(stored(world, "weekPlace").whole, true);
+  assert.equal(runOpen(world), false);
+  down = false;
+  await advance(world, 6.5 * HOUR);
+  whole(world, "2026-08-10", 30);
+  assert.equal(asked(world), 3);
 });
 
 test("a newer week listed ahead of a kept place does not wipe it", async () => {
@@ -609,7 +658,7 @@ test("a newer week listed ahead of a kept place does not wipe it", async () => {
   world.uber.rows.set("2026-08-17", rowsOf("2026-08-17", 30)); // a pay week ends, and the PC lists it first
   await advance(world, 6.5 * HOUR);
   visit(tab);
-  await advance(world, 10 * MINUTE);
+  await advance(world, 30 * MINUTE);
   assert.deepEqual(world.pc.posts.map((p) => [p.start, p.rows]), [["2026-08-10", 300], ["2026-08-17", 30]], "the week with the place is read first");
   assert.equal(asked(world), 8 + 23 + 3);
   assert.equal(askedTwice(world), 1, "only the page Uber refused is asked a second time");
@@ -630,7 +679,7 @@ test("Uber's check stops the run and keeps the place; nothing starts again by it
   await advance(world, 48 * HOUR);
   assert.equal(asked(world), 8, "two days with the tab open and nobody there: Uber is not asked again");
   visit(tab);
-  await advance(world, 10 * MINUTE);
+  await advance(world, 25 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 8 + 23, "the week is picked up at its eighth page");
 });
@@ -662,7 +711,7 @@ test("Uber's check on the first page from a kept place leaves the place where it
   await advance(world, 6.5 * HOUR);
   assert.equal(asked(world), 13);
   visit(tab);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 20 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 13 + 18);
 });
@@ -679,7 +728,7 @@ test("a sign-in page on the first page from a kept place leaves the place where 
   assert.equal(stored(world, "weekPlace").pages, 12);
   await advance(world, 6.5 * HOUR);
   visit(tab);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 20 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 13 + 18);
 });
@@ -698,7 +747,7 @@ test("a page back from the back/forward cache after Uber's stop picks the week u
   for (const timer of world.timers) if (timer.tab === tab && timer.every) timer.at = world.now + timer.every;
   stall(world, tab, false);
   for (const fn of tab.heard.window.pageshow) fn({ persisted: true });
-  await advance(world, 10 * MINUTE);
+  await advance(world, 25 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 8 + 23);
 });
@@ -709,13 +758,13 @@ test("an error partway through a carried-on week keeps the place", async () => {
   await advance(world, 4 * MINUTE);
   world.uber.rule = (request, count) => (count === 20 ? { status: 500, text: "{}" } : null);
   const tab = openTab(world);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 10 * MINUTE);
   assert.equal(asked(world), 20);
   assert.match(tab.status(), /Uber answered HTTP 500/);
   assert.equal(stored(world, "weekPlace").pages, 19);
   await advance(world, 6.5 * HOUR);
   visit(tab);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 15 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 20 + 11);
 });
@@ -733,7 +782,7 @@ test("a kept place Uber no longer takes is dropped, the run stops, and the week 
   assert.equal(world.pc.posts.length, 0);
   await advance(world, 6.5 * HOUR);
   visit(tab);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 30 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 13 + 30);
 });
@@ -744,7 +793,7 @@ test("Stop in the tab that is pulling ends the run, and no other tab carries it 
   const world = makeWorld({ "2026-08-10": 300 });
   const tab = openTab(world);
   openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   const puller = world.uber.requests[0].tab === tab.id ? tab : null;
   assert.ok(puller, "the first tab is the one pulling");
   tab.commands.Stop();
@@ -779,7 +828,7 @@ test("Stop given in another tab reaches the tab that is pulling, awake or held b
   const awake = makeWorld({ "2026-08-10": 300 });
   const puller = openTab(awake);
   const other = openTab(awake);
-  await until(awake, () => asked(awake) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(awake, () => asked(awake) === 12, 15 * MINUTE, "twelve pages asked");
   assert.equal(awake.uber.requests[0].tab, puller.id);
   other.commands.Stop();
   await advance(awake, 30 * MINUTE);
@@ -789,7 +838,7 @@ test("Stop given in another tab reaches the tab that is pulling, awake or held b
   // Held back by Chrome for longer than its lock stays fresh, then let go.
   const held = makeWorld({ "2026-08-10": 300 });
   const tab = openTab(held);
-  await until(held, () => asked(held) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(held, () => asked(held) === 12, 15 * MINUTE, "twelve pages asked");
   stall(held, tab, true);
   await advance(held, 4 * MINUTE);
   openTab(held).commands.Stop();
@@ -812,7 +861,7 @@ test("Stop given while a run is still settling its lock holds: nothing starts by
 test("a paused run is not carried on when its tab is put to sleep, and carries on in its own tab at a click", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   const tab = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   tab.click();
   assert.match(tab.status(), /paused/);
   await advance(world, 5 * MINUTE);
@@ -831,11 +880,11 @@ test("a paused run is not carried on when its tab is put to sleep, and carries o
 test("a tab held back long enough to lose the run to another leaves that run open", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   const first = openTab(world);
-  await until(world, () => asked(world) === 12, 5 * MINUTE, "twelve pages asked");
+  await until(world, () => asked(world) === 12, 15 * MINUTE, "twelve pages asked");
   stall(world, first, true);
   await advance(world, 4 * MINUTE); // past the three minutes its lock stays fresh
   const second = openTab(world);
-  await until(world, () => asked(world) === 20, 5 * MINUTE, "the second tab carried the run on");
+  await until(world, () => asked(world) === 20, 10 * MINUTE, "the second tab carried the run on");
   stall(world, first, false);
   await advance(world, SECOND);
   assert.match(first.status(), /another driver-site tab took over/);
@@ -843,7 +892,7 @@ test("a tab held back long enough to lose the run to another leaves that run ope
   assert.equal(stored(world, "openRun").pages, 20, "the run the first tab lost is still open");
   await advance(world, 4 * MINUTE);
   openTab(world);
-  await advance(world, 5 * MINUTE);
+  await advance(world, 12 * MINUTE);
   whole(world, "2026-08-10", 300);
   assert.equal(asked(world), 30);
 });
@@ -852,17 +901,17 @@ test("a tab held back with an answer on its way does not write its old place ove
   const world = makeWorld({ "2026-08-10": 300 });
   world.uber.latency = 2 * SECOND;
   const first = openTab(world);
-  await until(world, () => asked(world) === 13, 5 * MINUTE, "the thirteenth page asked", 100);
+  await until(world, () => asked(world) === 13, 15 * MINUTE, "the thirteenth page asked", 100);
   stall(world, first, true); // with that page's answer still on its way
   await advance(world, 4 * MINUTE);
   // A run with a page out and no answer is not carried on, so the second tab takes it over from the menu.
   openTab(world).commands["Pull Uber trips now"]();
-  await until(world, () => stored(world, "weekPlace").pages === 19, 5 * MINUTE, "the second tab is seven pages on");
+  await until(world, () => stored(world, "weekPlace").pages === 19, 10 * MINUTE, "the second tab is seven pages on");
   stall(world, first, false);
   await advance(world, 500);
   assert.match(first.status(), /another driver-site tab took over/);
   assert.equal(stored(world, "weekPlace").pages, 19, "the place is still the second tab's");
-  await advance(world, 5 * MINUTE);
+  await advance(world, 12 * MINUTE);
   whole(world, "2026-08-10", 300);
 });
 
@@ -871,7 +920,7 @@ test("Uber's stop, learned by a tab that had lost the run while the next was sti
   world.uber.latency = 2 * SECOND;
   world.uber.rule = (request, count) => (count === 13 ? { status: 429, text: "slow down" } : null);
   const first = openTab(world);
-  await until(world, () => asked(world) === 13, 5 * MINUTE, "the thirteenth page asked", 100);
+  await until(world, () => asked(world) === 13, 15 * MINUTE, "the thirteenth page asked", 100);
   stall(world, first, true); // Uber's check is on its way to a tab Chrome is holding back
   await advance(world, 4 * MINUTE);
   openTab(world); // a third tab, only open
@@ -890,12 +939,12 @@ test("Uber's stop, learned late by a tab that had lost the run, stops the tab th
   world.uber.latency = 2 * SECOND;
   world.uber.rule = (request, count) => (count === 13 ? { status: 403, text: "<html>challenge</html>" } : null);
   const first = openTab(world);
-  await until(world, () => asked(world) === 13, 5 * MINUTE, "the thirteenth page asked", 100);
+  await until(world, () => asked(world) === 13, 15 * MINUTE, "the thirteenth page asked", 100);
   stall(world, first, true); // Uber's check is on its way to a tab Chrome is holding back
   await advance(world, 4 * MINUTE);
   const second = openTab(world);
   second.commands["Pull Uber trips now"]();
-  await until(world, () => asked(world) === 20, 5 * MINUTE, "the second tab asks on");
+  await until(world, () => asked(world) === 20, 10 * MINUTE, "the second tab asks on");
   stall(world, first, false);
   await advance(world, SECOND);
   assert.match(first.status(), /Uber's check stopped it/);
@@ -906,42 +955,42 @@ test("Uber's stop, learned late by a tab that had lost the run, stops the tab th
   assert.equal(runOpen(world), false);
 });
 
-test("two tabs open at once: one pulls, and its Uber requests are four to eight seconds apart", async () => {
+test("two tabs open at once: one pulls, and its Uber requests are thirty to sixty seconds apart", async () => {
   // Math.random at its least and at its most: the shortest and the longest gap the script leaves.
   for (const random of [0, 0.999]) {
     const world = makeWorld({ "2026-08-03": 300, "2026-08-10": 300 });
     world.random = random;
     openTab(world);
     openTab(world);
-    await advance(world, 20 * MINUTE);
+    await advance(world, 75 * MINUTE);
     whole(world, "2026-08-10", 300);
     whole(world, "2026-08-03", 300);
     assert.equal(asked(world), 60);
     assert.equal(new Set(world.uber.requests.map((r) => r.tab)).size, 1);
     const gaps = world.uber.requests.slice(1).map((r, i) => r.at - world.uber.requests[i].at);
-    assert.ok(Math.min(...gaps) >= 4 * SECOND, `closest two requests with random ${random}: ${Math.min(...gaps)} ms`);
-    assert.ok(Math.max(...gaps) <= 8.5 * SECOND, `two requests furthest apart with random ${random}: ${Math.max(...gaps)} ms`);
-    if (random) assert.ok(Math.min(...gaps) >= 7.5 * SECOND, `the gap grows with the random number: ${Math.min(...gaps)} ms`);
+    assert.ok(Math.min(...gaps) >= 30 * SECOND, `closest two requests with random ${random}: ${Math.min(...gaps)} ms`);
+    assert.ok(Math.max(...gaps) <= 60.5 * SECOND, `two requests furthest apart with random ${random}: ${Math.max(...gaps)} ms`);
+    if (random) assert.ok(Math.min(...gaps) >= 59.5 * SECOND, `the gap grows with the random number: ${Math.min(...gaps)} ms`);
   }
 });
 
-test("a run handed from one tab to another keeps the four seconds between Uber requests", async () => {
+test("a run handed from one tab to another keeps the thirty seconds between Uber requests", async () => {
   const world = makeWorld({ "2026-08-10": 300 });
   world.random = 0;
   const first = openTab(world);
   await until(world, () => asked(world) === 5, 5 * MINUTE, "five pages asked", 50);
-  // Requests now come every 4 s exactly. The second tab's first look for a run is timed to come just after the
-  // seventh, and the first tab is closed in between.
+  // Requests now come every 30 s exactly. The second tab's first look for a run is timed to come just after the
+  // sixth, and the first tab is closed in between.
   const fifth = world.uber.requests[4].at;
-  await advance(world, fifth + 150 - world.now);
+  await advance(world, fifth + 22150 - world.now);
   openTab(world); // looks for a run 8 s from now
-  await advance(world, fifth + 8100 - world.now);
-  assert.equal(asked(world), 7);
+  await advance(world, fifth + 30100 - world.now);
+  assert.equal(asked(world), 6);
   await leave(first);
-  await advance(world, MINUTE);
-  const gap = world.uber.requests[7].at - world.uber.requests[6].at;
-  assert.equal(world.uber.requests[7].tab, 2);
-  assert.ok(gap >= 4 * SECOND, `the second tab's first request came ${gap} ms after the first tab's last`);
+  await advance(world, 2 * MINUTE);
+  const gap = world.uber.requests[6].at - world.uber.requests[5].at;
+  assert.equal(world.uber.requests[6].tab, 2);
+  assert.ok(gap >= 30 * SECOND, `the second tab's first request came ${gap} ms after the first tab's last`);
 });
 
 // ---------- before Uber is asked anything ----------
@@ -960,6 +1009,154 @@ test("leaving the page before Uber was asked anything does not count as a run", 
   await advance(world, 2 * MINUTE);
   whole(world, "2026-08-10", 30);
 });
+
+// ---------- a random-events pass ----------
+
+function seeded(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// One made-up history. What it must hold to, whatever happens in it:
+// no week is handed over with fewer rows than Uber has for it, or twice; no two Uber requests are less than thirty
+// seconds apart, whichever tabs they came from; once Uber has stopped a run nothing is asked for six hours, unless he
+// pulls from the menu; and with one tab left open and looked at now and then, every week gets in.
+async function randomRun(seed) {
+  const rand = seeded(seed);
+  const pick = (list) => list[Math.floor(rand() * list.length)];
+  const between = (low, high) => low + rand() * (high - low);
+  const starts = SEVEN.slice(0, 2 + Math.floor(rand() * 5));
+  const weeks = Object.fromEntries(starts.map((start) => [start, rand() < 0.15 ? 0 : Math.floor(rand() * 350)]));
+  const world = makeWorld(weeks);
+  world.uber.trailing = rand() < 0.5;
+  world.uber.latency = pick([0, 0, 150, 2 * SECOND, 15 * SECOND]);
+  world.pc.latency = pick([0, 0, 300]);
+  const began = world.now;
+  const log = [];
+  const say = (what) => log.push(`${Math.round((world.now - began) / SECOND)}s ${what}`);
+
+  // When a stop by Uber was put on record, and when he pulled from the menu.
+  const refusals = [];
+  const forced = [];
+  const set = world.store.set.bind(world.store);
+  world.store.set = (key, value) => {
+    const at = key === "uberRefused" ? Number((JSON.parse(value) || {}).at) : 0;
+    if (at > 0) refusals.push(at);
+    return set(key, value);
+  };
+
+  // Up to two of Uber's requests are answered with a stop of some kind, and one of the PC's hand-overs with an error.
+  const pages = Object.values(weeks).reduce((sum, rows) => sum + Math.ceil(rows / PAGE) + 1, 0);
+  const stops = new Map();
+  for (let left = Math.floor(rand() * 3); left > 0; left -= 1) {
+    stops.set(1 + Math.floor(rand() * pages), pick([
+      { status: 403, text: "<html>challenge</html>" }, { status: 429, text: "slow down" }, { status: 500, text: "{}" },
+      { status: 200, text: "<html>Sign in</html>" }, { fail: true }
+    ]));
+  }
+  world.uber.rule = (request, count) => stops.get(count) ?? null;
+  const failAt = rand() < 0.3 ? 1 + Math.floor(rand() * starts.length) : 0;
+  world.pc.rule = (tries) => (tries === failAt ? { status: 500, text: JSON.stringify({ ok: false, error: "Could not keep the trips." }) } : null);
+
+  const tabs = [openTab(world)];
+  const alive = () => tabs.filter((tab) => !tab.dead);
+  const awake = () => alive().filter((tab) => !tab.stalled);
+  const held = [];
+  let pcUpAt = 0;
+  // Time passes, with a tab Chrome held back let go, and the PC back up, when their time comes.
+  const pass = async (ms) => {
+    const end = world.now + ms;
+    while (world.now < end) {
+      const next = Math.min(end, pcUpAt > world.now ? pcUpAt : end, ...held.filter((h) => h.until > world.now).map((h) => h.until));
+      await advance(world, next - world.now);
+      for (const h of held.splice(0)) {
+        if (h.until > world.now) held.push(h);
+        else if (!h.tab.dead) stall(world, h.tab, false);
+      }
+      if (pcUpAt && pcUpAt <= world.now) { world.pc.down = false; pcUpAt = 0; }
+    }
+  };
+  const events = [
+    [3, "a tab is opened", () => { tabs.push(openTab(world)); }],
+    [3, "a tab is put to sleep", () => { const tab = pick(alive()); if (tab) sleep(tab); }],
+    [2, "a page is left", async () => { const tab = pick(awake()); if (tab) await leave(tab); }],
+    [3, "a tab is held back", () => { const tab = pick(awake()); if (tab) { stall(world, tab, true); held.push({ tab, until: world.now + between(20 * SECOND, 10 * MINUTE) }); } }],
+    [2, "the status line is clicked", () => { const tab = pick(awake().filter((t) => t.line && t.line.isConnected)); if (tab) tab.click(); }],
+    [2, "a tab is looked at", () => { const tab = pick(awake()); if (tab) visit(tab); }],
+    [2, "the PC goes down", () => { world.pc.down = true; pcUpAt = world.now + between(5 * SECOND, 4 * MINUTE); }],
+    [0.5, "Stop from the menu", () => { const tab = pick(awake()); if (tab) tab.commands.Stop(); }],
+    [1, "Pull Uber trips now", () => { const tab = pick(awake()); if (tab) { forced.push(world.now); tab.commands["Pull Uber trips now"](); } }],
+    // Every cursor Uber gave out is an old one now. Only with every tab gone for four minutes: a cursor still fresh
+    // that Uber answers with nothing is taken on Uber's word, which is the script's stated limit and not looked for here.
+    [0.7, "Uber's cursors go stale", async () => { for (const tab of alive()) sleep(tab); await pass(4 * MINUTE); world.uber.epoch += 1; world.uber.soft = pick([null, "empty", "first", "nodata"]); }]
+  ];
+  const weight = events.reduce((sum, [w]) => sum + w, 0);
+  for (let left = 5 + Math.floor(rand() * 20); left > 0; left -= 1) {
+    const kind = rand();
+    await pass(kind < 0.7 ? between(5 * SECOND, 10 * MINUTE) : kind < 0.95 ? between(10 * MINUTE, HOUR) : between(HOUR, 7 * HOUR));
+    world.random = rand();
+    let at = rand() * weight;
+    const event = events.find(([w]) => (at -= w) < 0) ?? events[0];
+    say(event[1]);
+    await event[2]();
+  }
+
+  // Then every tab is gone but a new one, the PC and Uber answer plainly, and he looks at the tab now and then.
+  for (const tab of alive()) sleep(tab);
+  held.length = 0;
+  world.pc.down = false;
+  world.pc.rule = null;
+  world.uber.rule = null;
+  const last = openTab(world);
+  say("one tab left open");
+  for (let look = 0; look < 12 && world.pc.pulled.size < starts.length; look += 1) {
+    await advance(world, 6.5 * HOUR);
+    visit(last);
+  }
+  await advance(world, 6.5 * HOUR);
+
+  const wrong = [];
+  for (const sent of world.pc.posts) {
+    if (sent.rows !== weeks[sent.start] || new Set(sent.ids).size !== sent.rows) wrong.push(`the week of ${sent.start} was handed over with ${sent.rows} of its ${weeks[sent.start]} rows`);
+  }
+  for (const start of starts) {
+    const times = post(world, start).length;
+    if (times !== 1) wrong.push(`the week of ${start} was handed over ${times} times`);
+  }
+  const requests = world.uber.requests;
+  for (let i = 1; i < requests.length; i += 1) {
+    const gap = requests[i].at - requests[i - 1].at;
+    if (gap < 30 * SECOND) wrong.push(`requests ${i} and ${i + 1} were ${gap} ms apart (tabs ${requests[i - 1].tab} and ${requests[i].tab})`);
+  }
+  for (const stop of refusals) {
+    const early = requests.find((r) => r.at > stop && r.at < stop + 6 * HOUR && !forced.some((at) => at >= stop && at <= r.at));
+    if (early) wrong.push(`Uber was asked ${Math.round((early.at - stop) / MINUTE)} min after it stopped a run, with no pull from the menu`);
+  }
+  if (requests.length > 10 * pages + 50) wrong.push(`${requests.length} requests for ${pages} pages`);
+  return { wrong, log, requests: requests.length, pages, stops: refusals.length };
+}
+
+const runs = flag("random");
+if (runs) {
+  const first = flag("seed") ?? 1;
+  let bad = 0; let requests = 0; let stopped = 0;
+  for (let seed = first; seed < first + runs; seed += 1) {
+    const result = await randomRun(seed);
+    requests += result.requests;
+    stopped += result.stops;
+    if (!result.wrong.length) continue;
+    bad += 1;
+    console.log(`FAIL  seed ${seed}\n      ${[...new Set(result.wrong)].slice(0, 6).join("\n      ")}\n      what happened: ${result.log.join("; ")}`);
+  }
+  console.log(`${runs - bad} of ${runs} random histories held (seeds ${first} to ${first + runs - 1}; ${requests} Uber requests, ${stopped} stops by Uber) (${file})`);
+  process.exit(bad ? 1 : 0);
+}
 
 let failed = 0;
 for (const { name, fn } of tests) {
