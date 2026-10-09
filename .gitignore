@@ -27,3 +27,6 @@
 !wow/afp-lookup/answer_lookups.py
 !wow/afp-lookup/test_answer_lookups.py
 !wow/afp-lookup/register_task.ps1
+# The WoW Forever taskbar shortcut's update check, red dot and "back up" notification (generated icon and logs stay out).
+!wow/forever-uptime/
+!wow/forever-uptime/*.ps1
