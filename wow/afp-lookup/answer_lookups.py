@@ -15,6 +15,12 @@ addon's second, last reload 10 seconds later.
   what Wowhead's own summary says, or that nothing was found, so a request never stays open for ever.
 * Only ItemNotes.lua is written. The saved variables are read, never changed: the addon drops a request itself once
   it sees the note.
+* The game's version is followed, not fixed here. Every game folder under the install that has the addon is watched,
+  so the job goes on when the beta's folder gets another name. When the launcher installs a new build, the addon's
+  TOC gets that build's interface number, so the game does not set the addon aside as out of date. That only makes
+  the game load it: an addon the new build breaks still has to be mended by hand.
+* The watch runs its own new code: when this file changes (and still compiles) it starts again from the new file
+  inside the same process, so the task never needs to be registered again for a change here.
 
 Run by the scheduled task "WoW Item Lookup Answers" (register_task.ps1). `--once` answers what is waiting and ends.
 """
@@ -26,6 +32,7 @@ import html
 import json
 import os
 import re
+import runpy
 import subprocess
 import sys
 import tempfile
@@ -36,7 +43,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-WOW_ROOT = Path(r"D:\Games\World of Warcraft\_classic_beta_")
+WOW_INSTALL = Path(r"D:\Games\World of Warcraft")  # its game folders (_classic_beta_, ...) are found, not named
+SCRIPT = Path(__file__).resolve()
 ADDON = "AuctionatorForeverPrices"
 PULSE_AGENT = Path(r"C:\Users\levik\Documents\Codex\PulseAgent")
 STATE_FILE = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "PulseAgent" / "afp-lookup-state.json"
@@ -65,6 +73,61 @@ def log(text: str) -> None:
 
 
 # ---- the game's files ----
+
+def flavor_roots(install: Path) -> list[Path]:
+    """The game folders of the install that have the addon."""
+    return sorted(path.parent.parent.parent for path in install.glob(f"_*_/Interface/AddOns/{ADDON}") if path.is_dir())
+
+
+def file_stamp(path: Path) -> tuple[int, int] | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
+
+
+def toc_file(wow_root: Path) -> Path:
+    return wow_root / "Interface" / "AddOns" / ADDON / f"{ADDON}.toc"
+
+
+def game_interface(wow_root: Path) -> int | None:
+    """The interface number of the build installed in this game folder (1.60.1.70334 is 16001), as the launcher
+    wrote it: .flavor.info names the folder's product, .build.info beside the folders has each product's version."""
+    try:
+        product = (wow_root / ".flavor.info").read_text(encoding="utf-8", errors="replace").split()[-1]
+        lines = (wow_root.parent / ".build.info").read_text(encoding="utf-8", errors="replace").splitlines()
+    except (OSError, IndexError):
+        return None
+    columns = [column.split("!")[0] for column in lines[0].split("|")] if lines else []
+    for line in lines[1:]:
+        row = dict(zip(columns, line.split("|")))
+        version = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)\.\d+", row.get("Version", ""))
+        if row.get("Product") == product and version:
+            major, minor, patch = map(int, version.groups())
+            return major * 10000 + minor * 100 + patch
+    return None
+
+
+def match_toc(wow_root: Path) -> bool:
+    """Gives the addon's TOC the installed build's interface number; True when the file was changed."""
+    wanted, toc = game_interface(wow_root), toc_file(wow_root)
+    if not wanted:
+        return False
+    try:
+        data = toc.read_bytes()
+    except OSError:
+        return False
+    line = re.search(rb"^##[ \t]*Interface:[ \t]*([^\r\n]*)", data, re.M)
+    if not line or str(wanted).encode() in re.findall(rb"\d+", line.group(1)):
+        return False
+    scratch = toc.with_name(toc.name + ".tmp")
+    scratch.write_bytes(data[:line.start(1)] + str(wanted).encode() + data[line.end(1):])
+    os.replace(scratch, toc)
+    log(f"{wow_root.name}: the game is now interface {wanted}; the addon's TOC said "
+        f"{line.group(1).decode('ascii', 'replace').strip() or 'nothing'} and now says {wanted}")
+    return True
+
 
 def saved_variable_files(wow_root: Path) -> list[Path]:
     return sorted(wow_root.glob(f"WTF/Account/*/SavedVariables/{ADDON}.lua"))
@@ -309,38 +372,67 @@ def answer_waiting(wow_root: Path, state_file: Path, facts_for: Callable[[int], 
     return waiting
 
 
-def watch(wow_root: Path, state_file: Path) -> None:
-    log(f"watching {wow_root} for item lookups")
-    seen: dict[Path, float] = {}
+def compiles(script: Path) -> bool:
+    try:
+        compile(script.read_bytes(), str(script), "exec")
+    except (OSError, SyntaxError, ValueError):
+        return False
+    return True
+
+
+def watch(roots: Callable[[], list[Path]], state_file: Path, script: Path = SCRIPT) -> None:
+    """Watches until this file changes; it returns then, for main to start the new code."""
+    log("watching for item lookups in " + (", ".join(str(root) for root in roots()) or "no game folder yet"))
+    running = changed = file_stamp(script)
+    seen: dict[Path, tuple[int, int] | None] = {}
+    builds: dict[Path, tuple] = {}
     waiting = 1  # look once at the start
     while True:
-        stamps = {}
-        for path in saved_variable_files(wow_root):
-            try:
-                stamps[path] = path.stat().st_mtime
-            except OSError:
-                pass
+        found = roots()
+        stamps = {path: file_stamp(path) for root in found for path in saved_variable_files(root)}
         if stamps != seen or waiting:
-            seen = stamps
-            try:
-                waiting = answer_waiting(wow_root, state_file)
-            except Exception as exc:  # one bad pass must not end the watch
-                log(f"pass failed ({type(exc).__name__}: {str(exc)[:200]})")
-                waiting = 0
+            seen, waiting = stamps, 0
+            for root in found:
+                try:
+                    waiting += answer_waiting(root, state_file)
+                except Exception as exc:  # one bad pass must not end the watch
+                    log(f"pass failed ({type(exc).__name__}: {str(exc)[:200]})")
+        build = {root: (file_stamp(root.parent / ".build.info"), file_stamp(toc_file(root))) for root in found}
+        if build != builds:  # the launcher installed a build, or the TOC was written again
+            builds = build
+            for root in found:
+                try:
+                    match_toc(root)
+                except Exception as exc:
+                    log(f"{root.name}: the TOC could not be matched to the game ({type(exc).__name__}: {str(exc)[:200]})")
+        code = file_stamp(script)
+        if code != running and code == changed:  # the same for two looks: nobody is still writing it
+            if compiles(script):
+                log("this job's code changed: starting again from the new file")
+                return
+            log("this job's code changed but does not compile: going on with the code that runs")
+            running = code
+        changed = code
         time.sleep(POLL_SECONDS)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--once", action="store_true", help="answer what is waiting and end")
-    parser.add_argument("--wow-root", type=Path, default=WOW_ROOT)
+    parser.add_argument("--wow-install", type=Path, default=WOW_INSTALL, help="the folder the game folders are in")
+    parser.add_argument("--wow-root", type=Path, help="one game folder, in place of every one that has the addon")
     parser.add_argument("--state", type=Path, default=STATE_FILE)
     args = parser.parse_args()
+    roots = (lambda: [args.wow_root]) if args.wow_root else (lambda: flavor_roots(args.wow_install))
     if args.once:
-        waiting = answer_waiting(args.wow_root, args.state)
+        waiting = 0
+        for root in roots():
+            match_toc(root)
+            waiting += answer_waiting(root, args.state)
         log(f"{waiting} still waiting")
         return 0
-    watch(args.wow_root, args.state)
+    watch(roots, args.state)
+    runpy.run_path(str(SCRIPT), run_name="__main__")  # the new code, in this process: the task keeps its one instance
     return 0
 
 

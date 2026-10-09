@@ -1,7 +1,8 @@
 # Registers (or replaces) the scheduled task that keeps answer_lookups.py running, then starts it.
 # The script watches for ever, so the task has no time limit; it is started at logon and looked at again
 # every 10 minutes, and a start while it is running is ignored, so there is only ever one.
-# Run it again after answer_lookups.py changes: the running copy is stopped and the new one started.
+# answer_lookups.py starts itself again from its new code when the file changes, so this is only run again
+# when the task itself changes: the running copy is stopped and the new one started.
 param(
     [string]$Script = "C:\Users\levik\Documents\Codex\wow\afp-lookup\answer_lookups.py",
     [string]$TaskName = "WoW Item Lookup Answers"

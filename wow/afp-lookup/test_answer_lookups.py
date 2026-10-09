@@ -190,5 +190,122 @@ class Wowhead(unittest.TestCase):
             job.wowhead_facts(1, get=broken)
 
 
+BUILD_INFO = ("Branch!STRING:0|Active!DEC:1|Tags!STRING:0|Version!STRING:0|KeyRing!HEX:16|Product!STRING:0\n"
+              "us|1|Windows enUS|11.2.5.63000||wow\n"
+              "us|1|Windows enUS|{version}||wow_classic_beta\n")
+TOC = b"## Interface: 16001\r\n## Title: Forever Shared Prices\r\n## Version: 2026-10-09.6\r\nData.lua\r\n"
+
+
+class GameVersion(unittest.TestCase):
+    """An install folder with one game folder that has the addon, as the launcher lays it out."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.install = Path(self.tmp.name) / "World of Warcraft"
+        self.root = self.install / "_classic_beta_"
+        self.toc = job.toc_file(self.root)
+        self.toc.parent.mkdir(parents=True)
+        self.toc.write_bytes(TOC)
+        (self.root / ".flavor.info").write_text("Product Flavor!STRING:0\nwow_classic_beta\n", encoding="utf-8")
+        self.build("1.60.1.70334")
+        self.state = Path(self.tmp.name) / "state.json"
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def build(self, version):
+        (self.install / ".build.info").write_text(BUILD_INFO.format(version=version), encoding="utf-8")
+
+    def test_only_game_folders_with_the_addon_are_found(self):
+        (self.install / "_retail_" / "Interface" / "AddOns").mkdir(parents=True)
+        (self.install / "Data").mkdir()
+        self.assertEqual(job.flavor_roots(self.install), [self.root])
+
+    def test_the_interface_number_is_this_folders_product(self):
+        self.assertEqual(job.game_interface(self.root), 16001)
+        self.build("1.60.2.70500")
+        self.assertEqual(job.game_interface(self.root), 16002)
+        self.build("2.5.10.71000")
+        self.assertEqual(job.game_interface(self.root), 20510)
+
+    def test_a_toc_that_matches_is_left_alone(self):
+        self.assertFalse(job.match_toc(self.root))
+        self.assertEqual(self.toc.read_bytes(), TOC)
+
+    def test_a_new_build_changes_only_the_interface_number(self):
+        self.build("1.60.2.70500")
+        self.assertTrue(job.match_toc(self.root))
+        self.assertEqual(self.toc.read_bytes(), TOC.replace(b"16001", b"16002"))
+        self.assertFalse(job.match_toc(self.root))
+
+    def test_a_toc_naming_several_interfaces_is_left_alone_when_one_matches(self):
+        several = TOC.replace(b"16001", b"11507, 16001")
+        self.toc.write_bytes(several)
+        self.assertFalse(job.match_toc(self.root))
+        self.assertEqual(self.toc.read_bytes(), several)
+
+    def test_no_build_to_read_changes_nothing(self):
+        for breakage in (lambda: (self.install / ".build.info").unlink(),
+                         lambda: (self.root / ".flavor.info").unlink(),
+                         lambda: self.build("soon")):
+            self.setUp_again()
+            breakage()
+            self.assertIsNone(job.game_interface(self.root))
+            self.assertFalse(job.match_toc(self.root))
+            self.assertEqual(self.toc.read_bytes(), TOC)
+
+    def setUp_again(self):
+        (self.root / ".flavor.info").write_text("Product Flavor!STRING:0\nwow_classic_beta\n", encoding="utf-8")
+        self.build("1.60.1.70334")
+
+    def watch(self, script, on_sleep, looks=6):
+        """Runs the watch with a clock that calls on_sleep(look number) in place of sleeping."""
+        count = [0]
+
+        def sleep(seconds):
+            count[0] += 1
+            if count[0] > looks:
+                raise TimeoutError("the watch went on")
+            on_sleep(count[0])
+        real, job.time.sleep = job.time.sleep, sleep
+        try:
+            job.watch(lambda: job.flavor_roots(self.install), self.state, script)
+        finally:
+            job.time.sleep = real
+        return count[0]
+
+    def test_the_watch_matches_the_toc_when_the_launcher_installs_a_build(self):
+        script = Path(self.tmp.name) / "job.py"
+        script.write_text("x = 1\n", encoding="utf-8")
+
+        def on_sleep(look):
+            if look == 2:
+                self.assertEqual(self.toc.read_bytes(), TOC)
+                self.build("1.60.2.70500")
+            if look == 3:
+                self.assertEqual(self.toc.read_bytes(), TOC.replace(b"16001", b"16002"))
+        with self.assertRaises(TimeoutError):
+            self.watch(script, on_sleep)
+
+    def test_the_watch_ends_for_new_code_once_it_is_whole(self):
+        script = Path(self.tmp.name) / "job.py"
+        script.write_text("x = 1\n", encoding="utf-8")
+
+        def on_sleep(look):
+            if look == 1:
+                script.write_text("x = (\n", encoding="utf-8")  # half written
+            if look == 4:
+                script.write_text("x = (2)\n\n", encoding="utf-8")
+        # 1 writes the half; 2 sees it settle, it does not compile, the watch goes on; 4 writes the whole file;
+        # the look after 4 sees the change, the look after 5 sees it has settled and ends the watch.
+        self.assertEqual(self.watch(script, on_sleep, looks=8), 5)
+
+    def test_the_watch_goes_on_while_the_code_is_the_same(self):
+        script = Path(self.tmp.name) / "job.py"
+        script.write_text("x = 1\n", encoding="utf-8")
+        with self.assertRaises(TimeoutError):
+            self.watch(script, lambda look: None)
+
+
 if __name__ == "__main__":
     unittest.main()
