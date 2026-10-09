@@ -1,6 +1,6 @@
 # What the taskbar shortcut and the "back up" notification run: take the red dot off, make sure the game is on
-# Blizzard's current build (wait for Battle.net to finish, or say the game is out of date), then start the game
-# through the Steam launcher. ASCII only.
+# Blizzard's current build (wait for Battle.net to finish, or say the game is out of date), keep the last session's
+# taint log, then start the game through the Steam launcher. ASCII only.
 param([string]$Uri = '', [switch]$Check)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
@@ -73,7 +73,7 @@ function Wait-ForUpdate($have, $want) {
 
 $go = $true
 try {
-    if (!(Get-Process -Name WowB -ErrorAction SilentlyContinue)) {
+    if (!(Test-GameRunning)) {
         $have = Get-InstalledBuild
         $want = Get-CurrentBuild
         # No answer from Blizzard's build list: nothing to compare, so start the game as before.
@@ -82,4 +82,8 @@ try {
 } catch {
     [Windows.Forms.MessageBox]::Show("Could not check for an update: $($_.Exception.Message)`nStarting the game anyway.", 'WoW Forever') | Out-Null
 }
-if ($go) { & $launcher }
+if ($go) {
+    # Keep the last session's taint log and leave the log on for this one. Never in the way of the game starting.
+    try { if (!(Test-GameRunning)) { Save-TaintLog; Set-TaintLogging } } catch { }
+    & $launcher
+}

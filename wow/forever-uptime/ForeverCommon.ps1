@@ -15,6 +15,48 @@ if ($script:TestDir) {
     $script:DotIcon = Join-Path $script:TestDir 'WowB-dot.ico'
     $script:Launcher = Join-Path $script:TestDir 'launcher.ps1'
 }
+$script:BetaDir = Join-Path $script:WowRoot '_classic_beta_'
+$script:TaintLevel = 2       # 1 = blocked actions only, 2 = also who tainted what (needed to find the addon behind a hang)
+$script:TaintLogsKept = 10
+
+# $true while the game is open; its files are only touched when it is not. Tests: a game-running.txt in the folder.
+function Test-GameRunning {
+    if ($script:TestDir) { return (Test-Path -LiteralPath (Join-Path $script:TestDir 'game-running.txt')) }
+    return [bool](Get-Process -Name WowB -ErrorAction SilentlyContinue)
+}
+
+# The game empties Logs\taint.log when it starts, so the log of a hang was gone by the time anyone read it.
+# Copies the last session's log to Logs\taint-kept, named by when it was last written, and keeps the newest few.
+function Save-TaintLog {
+    $log = Join-Path $script:BetaDir 'Logs\taint.log'
+    if (!(Test-Path -LiteralPath $log)) { return }
+    $item = Get-Item -LiteralPath $log
+    if ($item.Length -eq 0) { return }
+    $kept = Join-Path $script:BetaDir 'Logs\taint-kept'
+    New-Item -ItemType Directory -Path $kept -Force | Out-Null
+    $copy = Join-Path $kept ('taint-{0:yyyy-MM-dd_HH.mm.ss}.log' -f $item.LastWriteTime)
+    if (!(Test-Path -LiteralPath $copy)) { Copy-Item -LiteralPath $log -Destination $copy }
+    Get-ChildItem -LiteralPath $kept -Filter 'taint-*.log' | Sort-Object Name -Descending |
+        Select-Object -Skip $script:TaintLogsKept | Remove-Item -Force
+}
+
+# Turns the game's taint log on in WTF\Config.wtf (the game writes the file itself when it closes, so only while
+# it is closed). Every other line is left as it is.
+function Set-TaintLogging {
+    $config = Join-Path $script:BetaDir 'WTF\Config.wtf'
+    if (!(Test-Path -LiteralPath $config)) { return }
+    $want = 'SET taintLog "{0}"' -f $script:TaintLevel
+    $text = [IO.File]::ReadAllText($config)
+    if ($text -match ('(?m)^' + [regex]::Escape($want) + '\r?$')) { return }
+    if ($text -match '(?m)^SET taintLog ') {
+        $text = [regex]::Replace($text, '(?m)^SET taintLog "[^"]*"', $want)
+    } else {
+        $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+        if ($text.Length -and !$text.EndsWith("`n")) { $text += $nl }
+        $text += $want + $nl
+    }
+    [IO.File]::WriteAllText($config, $text, (New-Object Text.UTF8Encoding $false))
+}
 
 # The build Battle.net last finished installing: the product's row in the game folder's .build.info.
 function Get-InstalledBuild {
