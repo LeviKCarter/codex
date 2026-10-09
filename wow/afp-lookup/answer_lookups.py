@@ -3,8 +3,10 @@
 In the game, Ctrl + right-click on an item (or the lookup binding) records the item in the addon's saved
 variables under `lookupRequests` and reloads the UI, which is the only moment the game writes them to disk. This job
 watches that file. For each request without an answer it reads the item's Wowhead page, has Claude write a line
-from what the page says, and adds it to the addon's ItemNotes.lua. The next reload (a second Ctrl + right-click)
-shows it in the item's tooltip as "Lookup: ...".
+from what the page says, and adds it to the addon's ItemNotes.lua. The game only reads that file at a reload, so
+the addon reloads once more by itself 4 seconds after the first one has loaded (about 8 seconds after the request
+is on disk), and the item's tooltip then shows "Lookup: ...". An answer that takes longer is picked up by the
+addon's second, last reload 10 seconds later.
 
 * Wowhead is the only source. Its comments are other players' words: the prompt gives them as data, Claude runs
   with no tools, and the answer is cut to one line of plain text before it is written.
@@ -41,7 +43,7 @@ STATE_FILE = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "Puls
 WOWHEAD_TOOLTIP = "https://nether.wowhead.com/forever/tooltip/item/{id}"
 WOWHEAD_PAGE = "https://www.wowhead.com/forever/item={id}"
 USER_AGENT = "Mozilla/5.0"  # as measured 2026-10-09: this is answered, a full Chrome string gets 403 on the item page
-POLL_SECONDS = 2
+POLL_SECONDS = 1  # the addon waits a fixed time for the answer, so a second saved here is a second of margin
 RETRY_SECONDS = 60
 MAX_TRIES = 3
 NOTE_CHARS = 220  # a tooltip line; the addon wraps it
