@@ -75,6 +75,52 @@ try {
     $p.WaitForExit(20000) | Out-Null
     Check 'a late update still starts the game' ($p.HasExited -and (Test-Path "$dir\launched.txt"))
     if (!$p.HasExited) { $p.Kill() }
+
+    # The taint log: kept from the last session, and turned on for the next.
+    $beta = "$dir\_classic_beta_"
+    $kept = "$beta\Logs\taint-kept"
+    New-Item -ItemType Directory -Path "$beta\Logs", "$beta\WTF" -Force | Out-Null
+    $utf8 = New-Object Text.UTF8Encoding $false
+    $config = "SET portal `"US`"`r`nSET lastCharacterName `"Sn" + [char]0xE4 + "ps`"`r`nSET InputDeviceInterfaceStyle `"1`"`r`n"
+    function Set-Log($text, $when) { [IO.File]::WriteAllText("$beta\Logs\taint.log", $text);(Get-Item "$beta\Logs\taint.log").LastWriteTime = $when }
+    Set-Blizzard $new '1.60.1.2'; Reset-Case
+    [IO.File]::WriteAllText("$beta\WTF\Config.wtf", $config, $utf8)
+    Set-Log 'blocked: the hang' ([DateTime]'2026-10-09 17:30:12')
+
+    Set-Content -LiteralPath "$dir\game-running.txt" -Value 'yes'
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'game open: its log and settings are left alone' ((Test-Path "$dir\launched.txt") -and !(Test-Path $kept) -and [IO.File]::ReadAllText("$beta\WTF\Config.wtf", $utf8) -eq $config)
+    Remove-Item "$dir\game-running.txt"
+
+    Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    $copy = "$kept\taint-2026-10-09_17.30.12.log"
+    Check 'the last session''s taint log is kept before the game starts' ((Test-Path "$dir\launched.txt") -and (Test-Path $copy) -and (Get-Content $copy -Raw).Trim() -eq 'blocked: the hang')
+    Check 'the taint log is turned on, every other setting untouched' ([IO.File]::ReadAllText("$beta\WTF\Config.wtf", $utf8) -eq $config + "SET taintLog `"2`"`r`n")
+    Check 'the settings file gets no byte order mark' ([IO.File]::ReadAllBytes("$beta\WTF\Config.wtf")[0] -eq 0x53)
+
+    $before = (Get-Item "$beta\WTF\Config.wtf").LastWriteTimeUtc
+    Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'a second start keeps one copy and rewrites nothing' (@(Get-ChildItem $kept).Count -eq 1 -and (Get-Item "$beta\WTF\Config.wtf").LastWriteTimeUtc -eq $before)
+
+    [IO.File]::WriteAllText("$beta\WTF\Config.wtf", "SET taintLog `"0`"`nSET portal `"US`"", $utf8)
+    Set-Log '' ([DateTime]'2026-10-09 18:00:00')
+    Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'a log turned off is turned back on in place' ([IO.File]::ReadAllText("$beta\WTF\Config.wtf", $utf8) -eq "SET taintLog `"2`"`nSET portal `"US`"")
+    Check 'an empty log is not kept' (@(Get-ChildItem $kept).Count -eq 1)
+
+    foreach ($i in 1..12) { Set-Content -LiteralPath ("$kept\taint-2026-09-{0:00}_10.00.00.log" -f $i) -Value 'old' }
+    Set-Log 'newest' ([DateTime]'2026-10-09 19:00:00')
+    Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    $names = @(Get-ChildItem $kept | Sort-Object Name | ForEach-Object Name)
+    Check 'only the newest ten logs stay' ($names.Count -eq 10 -and $names[-1] -eq 'taint-2026-10-09_19.00.00.log' -and $names[0] -eq 'taint-2026-09-05_10.00.00.log')
+
+    Remove-Item -LiteralPath $beta -Recurse -Force; Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'no game folder: the game still starts' ($p.HasExited -and (Test-Path "$dir\launched.txt"))
 } finally {
     $env:WOWFOREVER_TEST_DIR = $null
     $env:WOWFOREVER_GIVE_UP = $null
