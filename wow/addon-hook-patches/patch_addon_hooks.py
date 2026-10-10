@@ -8,7 +8,8 @@ writes the hooks back, so the WoW Forever shortcut runs this before every launch
 
 usage: python patch_addon_hooks.py [--addons <Interface\\AddOns folder>] [--check]
 A file is rewritten only when every patch for it fits; the original goes to hook-patch-backups beside
-Interface, under the addon's version. --check changes nothing. Exit code 0: every file is patched, or its
+Interface, under the addon's version. A patch listed in RETIRED is taken out of a file that still has it.
+--check changes nothing. Exit code 0: every file is patched, or its
 misfit was already reported for that exact file. Exit code 2: a file no longer fits its patches (the addon
 changed) and this is the first run to see it. Tests: test_patch_addon_hooks.py.
 """
@@ -210,38 +211,6 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
-    "Spoken_Zones": {
-        "UI/MapPanel.lua": [
-            (
-                "the map's SetAlpha",
-                "\tif hooksecurefunc then hooksecurefunc(WorldMapFrame, \"SetAlpha\", FollowAlpha) end\n",
-                "\t-- Forever patch: reads the map's alpha on every frame it is shown, in place of a hook on its SetAlpha.\n"
-                "\tlocal seenAlpha\n"
-                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
-                "\t\tlocal alpha = WorldMapFrame:GetAlpha()\n"
-                "\t\tif alpha == seenAlpha then return end\n"
-                "\t\tseenAlpha = alpha\n"
-                "\t\tFollowAlpha()\n"
-                "\tend)\n",
-            ),
-        ],
-        "Core.lua": [
-            (
-                "the map's OnMapChanged",
-                "\thooksecurefunc(WorldMapFrame, \"OnMapChanged\", function()\n"
-                "\t\tDispatch(SpokenZones.mapChangedCallbacks, WorldMapFrame.mapID)\n"
-                "\tend)\n",
-                "\t-- Forever patch: reads the map on every frame it is shown, in place of a hook on its OnMapChanged.\n"
-                "\tlocal seenMap\n"
-                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
-                "\t\tlocal mapID = WorldMapFrame.mapID\n"
-                "\t\tif mapID == seenMap then return end\n"
-                "\t\tseenMap = mapID\n"
-                "\t\tDispatch(SpokenZones.mapChangedCallbacks, mapID)\n"
-                "\tend)\n",
-            ),
-        ],
-    },
     "Questie": {
         "Libs/Krowi_WorldMapButtons/Krowi_WorldMapButtons.lua": [
             (
@@ -339,6 +308,44 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
     },
 }
 
+# Patches taken out again, as they stood in PATCHES. A run puts the addon's own text back wherever the patch is
+# still in a file. Spoken_Zones: with these in (2026-10-09 18:07) the next two sessions both hung on closing the
+# world map with the controller, the taint log blaming Spoken_Zones (18:59 and 19:02); no log before blamed it.
+RETIRED: dict[str, dict[str, list[tuple[str, str, str]]]] = {
+    "Spoken_Zones": {
+        "UI/MapPanel.lua": [
+            (
+                "the map's SetAlpha",
+                "\tif hooksecurefunc then hooksecurefunc(WorldMapFrame, \"SetAlpha\", FollowAlpha) end\n",
+                "\t-- Forever patch: reads the map's alpha on every frame it is shown, in place of a hook on its SetAlpha.\n"
+                "\tlocal seenAlpha\n"
+                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
+                "\t\tlocal alpha = WorldMapFrame:GetAlpha()\n"
+                "\t\tif alpha == seenAlpha then return end\n"
+                "\t\tseenAlpha = alpha\n"
+                "\t\tFollowAlpha()\n"
+                "\tend)\n",
+            ),
+        ],
+        "Core.lua": [
+            (
+                "the map's OnMapChanged",
+                "\thooksecurefunc(WorldMapFrame, \"OnMapChanged\", function()\n"
+                "\t\tDispatch(SpokenZones.mapChangedCallbacks, WorldMapFrame.mapID)\n"
+                "\tend)\n",
+                "\t-- Forever patch: reads the map on every frame it is shown, in place of a hook on its OnMapChanged.\n"
+                "\tlocal seenMap\n"
+                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
+                "\t\tlocal mapID = WorldMapFrame.mapID\n"
+                "\t\tif mapID == seenMap then return end\n"
+                "\t\tseenMap = mapID\n"
+                "\t\tDispatch(SpokenZones.mapChangedCallbacks, mapID)\n"
+                "\tend)\n",
+            ),
+        ],
+    },
+}
+
 
 def plan(text: str, patches: list[tuple[str, str, str]]) -> tuple[str, list[str], list[str]]:
     """The text with every patch in, the patches newly put in, and the ones that fit nowhere."""
@@ -366,7 +373,10 @@ def addon_version(folder: Path) -> str:
     return "unknown"
 
 
-def run(addons: Path, check: bool = False, patches: dict | None = None) -> tuple[int, list[str]]:
+def run(addons: Path, check: bool = False, patches: dict | None = None,
+        retired: dict | None = None) -> tuple[int, list[str]]:
+    if retired is None:
+        retired = RETIRED if patches is None else {}
     patches = PATCHES if patches is None else patches
     backups = addons.parent.parent / "hook-patch-backups"
     state_file = backups / "state.json"
@@ -408,6 +418,25 @@ def run(addons: Path, check: bool = False, patches: dict | None = None) -> tuple
                     keep.write_bytes(raw)
                 path.write_bytes((patched.replace("\n", "\r\n") if crlf else patched).encode("utf-8"))
                 lines.append(f"{label}: patched {len(done)} ({'; '.join(done)})")
+
+    for addon, files in retired.items():
+        for name, file_patches in files.items():
+            path = addons / addon / name
+            try:
+                raw = path.read_bytes()
+            except OSError:
+                continue
+            crlf = b"\r\n" in raw
+            text = raw.decode("utf-8").replace("\r\n", "\n")
+            restored, done, _ = plan(text, [(what, new, old) for what, old, new in file_patches])
+            if not done:
+                continue
+            label = f"{addon} {addon_version(addons / addon)} {name}"
+            if check:
+                lines.append(f"{label}: would take out {len(done)} ({'; '.join(done)})")
+            else:
+                path.write_bytes((restored.replace("\n", "\r\n") if crlf else restored).encode("utf-8"))
+                lines.append(f"{label}: took out {len(done)} ({'; '.join(done)})")
 
     if not check and misfit_now != reported:
         backups.mkdir(parents=True, exist_ok=True)
