@@ -215,5 +215,53 @@ class Installed(unittest.TestCase):
         self.assertNotEqual(self.harness(patched.replace(anchor, ""), True), "")
 
 
+BAG_FILE = "core/features/uiOverrides.lua"
+
+
+@unittest.skipUnless((INSTALLED / "BagBrother" / BAG_FILE).is_file(), f"BagBrother is not installed in {INSTALLED}")
+class InstalledBags(unittest.TestCase):
+    """BagBrother's bag overrides, as installed (or as kept, once patched) and with the patches in."""
+
+    @classmethod
+    def setUpClass(cls):
+        kept = INSTALLED.parent.parent / "hook-patch-backups" / f"BagBrother-{job.addon_version(INSTALLED / 'BagBrother')}" / BAG_FILE
+        source = kept if kept.is_file() else INSTALLED / "BagBrother" / BAG_FILE
+        cls.original = source.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        cls.patched, cls.done, cls.misfits = job.plan(cls.original, job.PATCHES["BagBrother"][BAG_FILE])
+
+    def harness(self, source, hooked_call_fails):
+        from lupa.lua51 import LuaRuntime
+        lua = LuaRuntime()
+        lua.globals().SRC, lua.globals().HOOKED_CALL_FAILS = source, hooked_call_fails
+        return lua.execute((Path(__file__).parent / "bag_harness.lua").read_text(encoding="utf-8"))
+
+    def test_both_patches_fit(self):
+        self.assertEqual((len(self.done), self.misfits), (2, []))
+
+    def test_bags_and_the_money_row_end_up_where_bagbrother_puts_them(self):
+        self.assertEqual(self.harness(self.patched, True), "")
+        self.assertEqual(self.harness(self.patched, False), "")
+
+    def test_the_unpatched_file_does_the_same_until_a_hooked_call_fails(self):
+        self.assertEqual(self.harness(self.original, False), "", "the harness and the original addon disagree")
+        self.assertIn("attempt to call a nil value", self.harness(self.original, True))
+
+    def mutant(self, old, new):
+        self.assertEqual(self.patched.count(old), 1, old)
+        return self.harness(self.patched.replace(old, new), True)
+
+    def test_a_patch_that_misses_the_same_bag_opened_again_is_caught(self):
+        self.assertNotEqual(self.mutant("if bag ~= seenBag[i] or (shown and not seenShown[i]) then", "if bag ~= seenBag[i] then"), "")
+
+    def test_a_patch_that_moves_frames_before_the_game_opens_a_bag_is_caught(self):
+        self.assertNotEqual(self.mutant("\t\tseenBag[i], seenShown[i] = frame:GetID(), frame:IsShown()\n", ""), "")
+
+    def test_a_patch_that_places_the_money_row_every_frame_is_caught(self):
+        self.assertNotEqual(self.mutant("math.abs(BackpackTokenFrame:GetWidth() - width) < 0.5 then return end", "false then return end"), "")
+
+    def test_a_patch_that_never_places_the_money_row_is_caught(self):
+        self.assertNotEqual(self.mutant("\t\t\t\tBackpackTokenFrame:ClearAllPoints()\n\t\t\t\tBackpackTokenFrame:SetWidth(width)\n", ""), "")
+
+
 if __name__ == "__main__":
     unittest.main()

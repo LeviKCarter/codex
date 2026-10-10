@@ -18,6 +18,7 @@ import hashlib
 import json
 import re
 import sys
+import time
 from pathlib import Path
 
 DEFAULT_ADDONS = Path(r"D:\Games\World of Warcraft\_classic_beta_\Interface\AddOns")
@@ -261,6 +262,65 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
+    "BagBrother": {
+        "core/features/uiOverrides.lua": [
+            (
+                "the backpack's UpdateCurrencyFrames",
+                "\t\t\thooksecurefunc(ContainerFrame1, 'UpdateCurrencyFrames', function(f)\n"
+                "\t\t\t\tf.MoneyFrame:SetPoint('BOTTOMLEFT', 8, 8)\n"
+                "\t\t\t\tf.MoneyFrame:SetPoint('BOTTOMRIGHT', -8, 8)\n"
+                "\n"
+                "\t\t\t\tBackpackTokenFrame:ClearAllPoints()\n"
+                "\t\t\t\tBackpackTokenFrame:SetWidth(Addon.CurrencyLimit * 50)\n"
+                "\t\t\tend)\n",
+                "\t\t\t-- Forever patch: reads the backpack's money and currency frames on every frame it is shown,\n"
+                "\t\t\t-- in place of a hook on its UpdateCurrencyFrames.\n"
+                "\t\t\tCreateFrame('Frame', nil, ContainerFrame1):SetScript('OnUpdate', function()\n"
+                "\t\t\t\tlocal f, width = ContainerFrame1, Addon.CurrencyLimit * 50\n"
+                "\t\t\t\tlocal _, anchor = f.MoneyFrame:GetPoint(1)\n"
+                "\t\t\t\tif anchor == f and BackpackTokenFrame:GetNumPoints() == 0 and math.abs(BackpackTokenFrame:GetWidth() - width) < 0.5 then return end\n"
+                "\t\t\t\tf.MoneyFrame:SetPoint('BOTTOMLEFT', 8, 8)\n"
+                "\t\t\t\tf.MoneyFrame:SetPoint('BOTTOMRIGHT', -8, 8)\n"
+                "\n"
+                "\t\t\t\tBackpackTokenFrame:ClearAllPoints()\n"
+                "\t\t\t\tBackpackTokenFrame:SetWidth(width)\n"
+                "\t\t\tend)\n",
+            ),
+            (
+                "the bag frames' SetID",
+                "\tfor i = 1, NUM_CONTAINER_FRAMES do\n"
+                "\t\thooksecurefunc(_G['ContainerFrame' .. i], 'SetID', function(frame, bag)\n"
+                "\t\t\tif Addon.Frames:HasBag(Location(bag)) then\n"
+                "\t\t\t\tframe:SetParent(self.Disabled)\n"
+                "\t\t\telseif frame:GetParent() == self.Disabled then\n"
+                "\t\t\t\tframe:SetParent(Parent)\n"
+                "\t\t\tend\n"
+                "\t\tend)\n"
+                "\tend\n",
+                "\t-- Forever patch: reads each bag frame on every frame, in place of a hook on its SetID. The game\n"
+                "\t-- sets the ID and then shows the frame, so a new ID or a frame newly shown is a SetID.\n"
+                "\tlocal seenBag, seenShown = {}, {}\n"
+                "\tfor i = 1, NUM_CONTAINER_FRAMES do\n"
+                "\t\tlocal frame = _G['ContainerFrame' .. i]\n"
+                "\t\tseenBag[i], seenShown[i] = frame:GetID(), frame:IsShown()\n"
+                "\tend\n"
+                "\tCreateFrame('Frame'):SetScript('OnUpdate', function()\n"
+                "\t\tfor i = 1, NUM_CONTAINER_FRAMES do\n"
+                "\t\t\tlocal frame = _G['ContainerFrame' .. i]\n"
+                "\t\t\tlocal bag, shown = frame:GetID(), frame:IsShown()\n"
+                "\t\t\tif bag ~= seenBag[i] or (shown and not seenShown[i]) then\n"
+                "\t\t\t\tif Addon.Frames:HasBag(Location(bag)) then\n"
+                "\t\t\t\t\tframe:SetParent(self.Disabled)\n"
+                "\t\t\t\telseif frame:GetParent() == self.Disabled then\n"
+                "\t\t\t\t\tframe:SetParent(Parent)\n"
+                "\t\t\t\tend\n"
+                "\t\t\tend\n"
+                "\t\t\tseenBag[i], seenShown[i] = bag, shown\n"
+                "\t\tend\n"
+                "\tend)\n",
+            ),
+        ],
+    },
     "QuestieForeverGamepad": {
         "TrackerBridge.lua": [
             (
@@ -295,10 +355,14 @@ def plan(text: str, patches: list[tuple[str, str, str]]) -> tuple[str, list[str]
 
 
 def addon_version(folder: Path) -> str:
-    for toc in sorted(folder.glob("*.toc")):
+    """The .toc's version; an addon that states none (BagBrother) goes by the day its .toc was written."""
+    tocs = sorted(folder.glob("*.toc"))
+    for toc in tocs:
         found = re.search(r"^## Version:\s*(\S+)", toc.read_text(encoding="utf-8", errors="replace"), re.M)
         if found:
             return re.sub(r"[^\w.\-]", "_", found.group(1))
+    if tocs:
+        return "d" + time.strftime("%Y%m%d", time.localtime(max(toc.stat().st_mtime for toc in tocs)))
     return "unknown"
 
 
