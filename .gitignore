@@ -35,3 +35,10 @@
 !wow/forever-uptime/test_watch_beta.py
 !wow/forever-uptime/fixtures/
 !wow/forever-uptime/fixtures/outages-2026-10.json
+# The job that sends Claude the evidence when WoW crashes or hangs (its reports/ folder, the evidence itself, stays out).
+!wow/crash-report/
+!wow/crash-report/watch_crashes.py
+!wow/crash-report/test_watch_crashes.py
+!wow/crash-report/register_task.ps1
+!wow/crash-report/Notify-Crash.ps1
+!wow/crash-report/KNOWN.md
