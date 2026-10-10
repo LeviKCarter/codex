@@ -141,17 +141,17 @@ class Hang(Game):
         self.assertTrue(self.send(made[0]))  # --report <folder>
         self.assertTrue((made[0] / "report.md").exists())
 
-    def test_old_folders_lose_only_their_copied_log(self):
-        for day in range(1, job.TAINT_LOGS_KEPT + 2):
+    def test_only_the_last_handful_of_crashes_are_kept(self):
+        for day in range(1, job.REPORTS_KEPT + 2):
             old = self.reports / f"2026-08-{day:02d}_10.00.00_hang"
             old.mkdir(parents=True)
-            (old / "taint.log").write_text("x")
             (old / "report.md").write_text("CAUSE: x")
-        self.look({"seen": "2026-10-09T17:00:00"}, "2026-10-09 17:54:30", [hang("2026-10-09 17:54:10")])
-        self.assertFalse((self.reports / "2026-08-01_10.00.00_hang" / "taint.log").exists())
-        self.assertFalse((self.reports / "2026-08-02_10.00.00_hang" / "taint.log").exists())
-        self.assertTrue((self.reports / "2026-08-01_10.00.00_hang" / "report.md").exists())
-        self.assertTrue((self.reports / "2026-08-03_10.00.00_hang" / "taint.log").exists())
+        (self.reports / "my_notes").mkdir()  # not a report folder: never touched
+        made = self.look({"seen": "2026-10-09T17:00:00"}, "2026-10-09 17:54:30", [hang("2026-10-09 17:54:10")])
+        left = sorted(path.name for path in self.reports.iterdir())
+        self.assertEqual(left, [f"2026-08-{day:02d}_10.00.00_hang" for day in range(3, job.REPORTS_KEPT + 2)]
+                         + [made[0].name, "my_notes"])
+        self.assertEqual(len(left) - 1, job.REPORTS_KEPT)
 
 
 class Crash(Game):

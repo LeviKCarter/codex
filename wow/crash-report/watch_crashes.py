@@ -8,7 +8,7 @@ a report only existed when Levi opened a session and described what he saw. This
   Error" event for a Wow*.exe; the event log is read when the game's process goes away and when this job starts.
 * Each one gets a folder under reports\\ beside this file: what happened, the crash text, a copy of the taint log as
   the game left it, a digest of that log, and the installed addons with their versions. The folder is made at once,
-  so the evidence is kept whether or not Claude answers.
+  so the evidence is kept whether or not Claude answers. Only the newest five folders stay; older ones are deleted.
 * Claude (the signed-in CLI, as Pulse Agent's model jobs run it) is started in that folder with read-only file tools
   and nothing of Levi's loaded, and writes report.md: the cause in one line, then the evidence for it, what is not
   proven and what to try. KNOWN.md beside this file is given to it as what earlier sessions found; keep it current.
@@ -59,7 +59,8 @@ SAME_CRASH = timedelta(seconds=60)
 TAINT_BEFORE, TAINT_AFTER = timedelta(minutes=10), timedelta(seconds=90)  # a taint log last written then is this session's
 LOOK_BACK = timedelta(hours=24)  # after the PC was off: older than this is not reported
 EVENTS_EVERY = timedelta(minutes=10)  # the event log is also read now and then, for an end this job did not see
-TAINT_LOGS_KEPT = 30  # older folders keep their report and digest; the copied log (megabytes each) goes
+REPORTS_KEPT = 5  # only the last handful of crashes are kept (Levi, 2026-10-09); older folders are deleted whole
+REPORT_FOLDER = re.compile(r"^\d{4}-\d\d-\d\d_\d\d\.\d\d\.\d\d_(hang|crash)$")
 MODEL = "sonnet"
 CLAUDE_SECONDS = 420
 DIGEST_KINDS, DIGEST_BLOCK_LINES, DIGEST_TAIL = 40, 45, 60
@@ -436,8 +437,9 @@ def look(state: dict, now: datetime, install: Path, reports: Path, read_events: 
         bundle = build_folder(row, reports)  # before Claude is asked: the next start of the game empties the log
         log(f"{row['kind']} at {row['when']:%H:%M:%S}: evidence in {bundle}")
         made.append(bundle)
-    for old in sorted((path for path in reports.glob("*_*") if path.is_dir()), reverse=True)[TAINT_LOGS_KEPT:]:
-        (old / "taint.log").unlink(missing_ok=True)
+    kept = sorted((path for path in reports.glob("*_*") if path.is_dir() and REPORT_FOLDER.match(path.name)), reverse=True)
+    for old in kept[REPORTS_KEPT:]:
+        shutil.rmtree(old, ignore_errors=True)
     for bundle in made:
         send(bundle)
     return made
