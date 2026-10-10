@@ -7,7 +7,8 @@ description: Archive every Claude desktop session whose work is finished, and le
 
 Levi runs many sessions at once and the sidebar fills with finished ones. This sorts them by evidence, archives the
 finished ones and reports the rest. Running it is the go-ahead to archive (archiving is reversible: a session comes
-back from the Archived list). `/archive-finished check` stops after step 3.
+back from the Archived list), and to remove the merged PulseOps worktrees in step 6. `/archive-finished check` stops
+after step 3 and reports what steps 4 and 6 would do.
 
 It needs the desktop app's session tools (`mcp__ccd_session_mgmt__list_sessions`, `list_events`, `archive_session`);
 load them with ToolSearch. Without them, say so and stop.
@@ -67,4 +68,29 @@ Two short lists, each session linked as `[title](#<sessionId>)`:
 - **Archived:** title and the evidence in a few words.
 - **Kept:** title and why, grouped as running, pinned, waiting on Levi (say for what), and unfinished.
 
-Say that the worktrees under `PulseOps-worktrees\` are not touched: `remove_worktree.ps1` owns those.
+## 6. Remove the PulseOps worktrees that merged work left behind
+
+Archiving a session removes its own worktree under `Codex\.claude\worktrees`, but not the PulseOps worktree it made
+with `new_worktree.ps1`. Sweep those from `C:\Users\levik\Documents\Codex\PulseOps` (its remote is `github`, not
+`origin`). Skip this step under `check`, but report the count.
+
+`git fetch github`, then for each worktree under `PulseOps-worktrees\` remove it only when all three hold:
+
+- `git -C <dir> status --porcelain` prints nothing;
+- `git -C <dir> cherry github/main HEAD` has no `+` line (every patch is already in main; a count of commits ahead
+  proves nothing, since PRs are squash-merged);
+- nothing under it changed in the last 12 hours (`find <dir> -maxdepth 2 -newermt "-12 hours"`, node_modules
+  excluded), so a session still at work keeps its folder.
+
+Remove with the repo's own script, never `git worktree remove` or a recursive delete (they would follow the
+node_modules junction into the live modules):
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/remove_worktree.ps1 -Name <name>
+```
+
+The script deletes branch `LKC/<name>`. When the worktree's checked-out branch has another name, pass `-KeepBranch`:
+`LKC/<name>` is then a different branch that nothing here has vouched for.
+
+Afterwards `curl http://localhost:3000/` must still answer 200. Report how many were removed and list the ones kept
+for a `+` line with no merged PR: those hold work that never reached main, which is Levi's call.
