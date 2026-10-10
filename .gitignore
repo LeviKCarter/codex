@@ -40,6 +40,7 @@
 !wow/addon-hook-patches/patch_addon_hooks.py
 !wow/addon-hook-patches/test_patch_addon_hooks.py
 !wow/addon-hook-patches/mapframe_harness.lua
+!wow/addon-hook-patches/bag_harness.lua
 # The job that sends Claude the evidence when WoW crashes or hangs (its reports/ folder, the evidence itself, stays out).
 !wow/crash-report/
 !wow/crash-report/watch_crashes.py
