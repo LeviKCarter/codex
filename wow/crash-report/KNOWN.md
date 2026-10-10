@@ -36,6 +36,15 @@ remove what turns out wrong, and say when something is only a suspicion.
 - What repeats in the 18:59 log: `StaticPopup1:Hide()` 1173 times in 13 seconds, each reached from
   `SetUIFocusState(false)` in the `GLOBAL_REGION_MOUSE_DOWN` handler (`FrameControlsManager.lua:686`), each ending
   in the blocked call. The log does not show what makes it repeat.
+- The 19:02 hang the same evening was the same again: one minute into the session, on closing the world map,
+  Spoken_Zones blamed 1878 times. At 18:07 that day our own launch patcher (`wow\addon-hook-patches`) had rewritten
+  two Spoken_Zones hooks on the map (SetAlpha, OnMapChanged) as per-frame readers that are children of the map. No
+  log from before 18:07 blames Spoken_Zones for a blocked call, and both sessions after it hung on a map close.
+  How those readers would taint the map is not shown by any file. The patch was taken out that evening (the
+  patcher puts Spoken_Zones' own code back at the next start from the WoW Forever shortcut). Test running from
+  then: a hang on closing the map that still blames Spoken_Zones means the addon as its author wrote it does this,
+  not our patch; say which it is. Questie (Krowi_WorldMapButtons), QuestieForeverGamepad and MapUtils still carry
+  the same kind of patch: say so if a log blames one of them on a map close.
 - Not yet done: a session with every addon off, to separate Blizzard's own bug from addon taint.
 
 ## Crashes with a crash text (Errors folder)

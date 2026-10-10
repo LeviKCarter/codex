@@ -82,15 +82,34 @@ class Mechanics(unittest.TestCase):
         code, lines = job.run(self.addons, patches={"Gone": {"a.lua": [("show", OLD, NEW)]}})
         self.assertEqual((code, lines), (0, ["Gone: not installed"]))
 
+    def test_a_retired_patch_is_taken_out_and_the_addon_is_as_it_came(self):
+        job.run(self.addons, patches=SAMPLE)
+        code, lines = job.run(self.addons, patches={}, retired=SAMPLE)
+        self.assertEqual((code, lines), (0, ["Sample 1.2.3 a.lua: took out 2 (show; second)"]))
+        self.assertEqual(self.file.read_bytes(), self.original)
+        stamp = self.file.stat().st_mtime_ns
+        self.assertEqual(job.run(self.addons, patches={}, retired=SAMPLE), (0, []))
+        self.assertEqual(self.file.stat().st_mtime_ns, stamp, "an addon without the patch is not rewritten")
+
+    def test_check_takes_nothing_out(self):
+        job.run(self.addons, patches=SAMPLE)
+        patched = self.file.read_bytes()
+        code, lines = job.run(self.addons, check=True, patches={}, retired=SAMPLE)
+        self.assertEqual((code, lines), (0, ["Sample 1.2.3 a.lua: would take out 2 (show; second)"]))
+        self.assertEqual(self.file.read_bytes(), patched)
+
+    def test_no_addon_is_both_patched_and_retired(self):
+        self.assertFalse(set(job.PATCHES) & set(job.RETIRED))
+
     def test_every_patch_carries_the_mark_and_differs_from_what_it_replaces(self):
-        for addon, files in job.PATCHES.items():
+        for addon, files in {**job.PATCHES, **job.RETIRED}.items():
             for name, patches in files.items():
                 for what, old, new in patches:
                     self.assertIn(job.MARK, new, f"{addon}/{name}: {what}")
                     self.assertNotIn(new, old, f"{addon}/{name}: {what}")
 
 
-# The four small map watchers: what each puts in place of its hook, run on a mocked map. `calls` counts how
+# The two small map watchers: what each puts in place of its hook, run on a mocked map. `calls` counts how
 # often the addon's own callback ran.
 WATCHER_ENV = """
 calls = 0
@@ -101,11 +120,10 @@ function WorldMapFrame:GetMapID() return self.mapID end
 function WorldMapFrame:GetAlpha() return self.alpha end
 function CreateFrame() return { SetScript = function(_, _, fn) onUpdate = fn end } end
 function Frames(count) for _ = 1, count do onUpdate() end end
-local FollowAlpha, Dispatch, MapHUDChanged = Count, Count, Count
-local SpokenZones, button, lib, map = {}, { Refresh = Count }, { SetPoints = function() end }, WorldMapFrame
+local MapHUDChanged = Count
+local button, lib, map = { Refresh = Count }, { SetPoints = function() end }, WorldMapFrame
 """
-WATCHERS = [("Spoken_Zones", "UI/MapPanel.lua", "alpha", 0.5), ("Spoken_Zones", "Core.lua", "mapID", 2),
-            ("Questie", "Libs/Krowi_WorldMapButtons/Krowi_WorldMapButtons.lua", "mapID", 2),
+WATCHERS = [("Questie", "Libs/Krowi_WorldMapButtons/Krowi_WorldMapButtons.lua", "mapID", 2),
             ("QuestieForeverGamepad", "TrackerBridge.lua", "mapID", 2)]
 
 
