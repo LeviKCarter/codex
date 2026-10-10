@@ -209,6 +209,74 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
+    "Spoken_Zones": {
+        "UI/MapPanel.lua": [
+            (
+                "the map's SetAlpha",
+                "\tif hooksecurefunc then hooksecurefunc(WorldMapFrame, \"SetAlpha\", FollowAlpha) end\n",
+                "\t-- Forever patch: reads the map's alpha on every frame it is shown, in place of a hook on its SetAlpha.\n"
+                "\tlocal seenAlpha\n"
+                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
+                "\t\tlocal alpha = WorldMapFrame:GetAlpha()\n"
+                "\t\tif alpha == seenAlpha then return end\n"
+                "\t\tseenAlpha = alpha\n"
+                "\t\tFollowAlpha()\n"
+                "\tend)\n",
+            ),
+        ],
+        "Core.lua": [
+            (
+                "the map's OnMapChanged",
+                "\thooksecurefunc(WorldMapFrame, \"OnMapChanged\", function()\n"
+                "\t\tDispatch(SpokenZones.mapChangedCallbacks, WorldMapFrame.mapID)\n"
+                "\tend)\n",
+                "\t-- Forever patch: reads the map on every frame it is shown, in place of a hook on its OnMapChanged.\n"
+                "\tlocal seenMap\n"
+                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
+                "\t\tlocal mapID = WorldMapFrame.mapID\n"
+                "\t\tif mapID == seenMap then return end\n"
+                "\t\tseenMap = mapID\n"
+                "\t\tDispatch(SpokenZones.mapChangedCallbacks, mapID)\n"
+                "\tend)\n",
+            ),
+        ],
+    },
+    "Questie": {
+        "Libs/Krowi_WorldMapButtons/Krowi_WorldMapButtons.lua": [
+            (
+                "the map's OnMapChanged",
+                "\thooksecurefunc(WorldMapFrame, \"OnMapChanged\", function()\n"
+                "\t\tbutton:Refresh();\n"
+                "\t\tlib.SetPoints();\n"
+                "\tend);\n",
+                "\t-- Forever patch: reads the map on every frame it is shown, in place of a hook on its OnMapChanged.\n"
+                "\tlocal seenMap;\n"
+                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
+                "\t\tlocal mapID = WorldMapFrame:GetMapID();\n"
+                "\t\tif mapID == seenMap then return; end\n"
+                "\t\tseenMap = mapID;\n"
+                "\t\tbutton:Refresh();\n"
+                "\t\tlib.SetPoints();\n"
+                "\tend);\n",
+            ),
+        ],
+    },
+    "QuestieForeverGamepad": {
+        "TrackerBridge.lua": [
+            (
+                "the map's OnMapChanged",
+                "        hooksecurefunc(map,\"OnMapChanged\",MapHUDChanged)\n",
+                "        -- Forever patch: reads the map on every frame it is shown, in place of a hook on its OnMapChanged.\n"
+                "        local seenMap\n"
+                "        CreateFrame(\"Frame\",nil,map):SetScript(\"OnUpdate\",function()\n"
+                "            local mapID=map:GetMapID()\n"
+                "            if mapID==seenMap then return end\n"
+                "            seenMap=mapID\n"
+                "            MapHUDChanged()\n"
+                "        end)\n",
+            ),
+        ],
+    },
 }
 
 

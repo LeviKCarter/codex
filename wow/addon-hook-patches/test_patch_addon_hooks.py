@@ -90,6 +90,51 @@ class Mechanics(unittest.TestCase):
                     self.assertNotIn(new, old, f"{addon}/{name}: {what}")
 
 
+# The four small map watchers: what each puts in place of its hook, run on a mocked map. `calls` counts how
+# often the addon's own callback ran.
+WATCHER_ENV = """
+calls = 0
+local function Count() calls = calls + 1 end
+local onUpdate
+WorldMapFrame = { mapID = 1, alpha = 1 }
+function WorldMapFrame:GetMapID() return self.mapID end
+function WorldMapFrame:GetAlpha() return self.alpha end
+function CreateFrame() return { SetScript = function(_, _, fn) onUpdate = fn end } end
+function Frames(count) for _ = 1, count do onUpdate() end end
+local FollowAlpha, Dispatch, MapHUDChanged = Count, Count, Count
+local SpokenZones, button, lib, map = {}, { Refresh = Count }, { SetPoints = function() end }, WorldMapFrame
+"""
+WATCHERS = [("Spoken_Zones", "UI/MapPanel.lua", "alpha", 0.5), ("Spoken_Zones", "Core.lua", "mapID", 2),
+            ("Questie", "Libs/Krowi_WorldMapButtons/Krowi_WorldMapButtons.lua", "mapID", 2),
+            ("QuestieForeverGamepad", "TrackerBridge.lua", "mapID", 2)]
+
+
+class Watchers(unittest.TestCase):
+    def play(self, snippet, field, value):
+        from lupa.lua51 import LuaRuntime
+        lua = LuaRuntime()
+        lua.execute(WATCHER_ENV + snippet)
+        counts = []
+        for change in (None, None, value, None):
+            if change is not None:
+                lua.execute(f"WorldMapFrame.{field} = {change}")
+            lua.execute("Frames(10)")
+            counts.append(lua.globals().calls)
+        return counts
+
+    def test_each_runs_its_callback_once_per_change_and_not_in_between(self):
+        for addon, name, field, value in WATCHERS:
+            (_, _, new), = job.PATCHES[addon][name]
+            self.assertEqual(self.play(new, field, value), [1, 1, 2, 2], f"{addon}/{name}")
+
+    def test_a_watcher_that_forgets_what_it_saw_is_caught(self):
+        for addon, name, field, value in WATCHERS:
+            (_, _, new), = job.PATCHES[addon][name]
+            broken = re.sub(r"\n\s*seen\w+ ?= ?\w+;?\n", "\n", new)
+            self.assertNotEqual(broken, new)
+            self.assertNotEqual(self.play(broken, field, value), [1, 1, 2, 2], f"{addon}/{name}")
+
+
 # A hook on a frame's own method: hooksecurefunc(<not a string>, ...), also through pcall.
 METHOD_HOOK = re.compile(r"hooksecurefunc\s*[(,]\s*(?!\")[\w.\[\]\"]+\s*,\s*[\w\"]")
 
