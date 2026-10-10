@@ -35,6 +35,11 @@
 !wow/forever-uptime/test_watch_beta.py
 !wow/forever-uptime/fixtures/
 !wow/forever-uptime/fixtures/outages-2026-10.json
+# WoW Forever: takes addons' hooks off Blizzard's frame methods before each launch.
+!wow/addon-hook-patches/
+!wow/addon-hook-patches/patch_addon_hooks.py
+!wow/addon-hook-patches/test_patch_addon_hooks.py
+!wow/addon-hook-patches/mapframe_harness.lua
 # The job that sends Claude the evidence when WoW crashes or hangs (its reports/ folder, the evidence itself, stays out).
 !wow/crash-report/
 !wow/crash-report/watch_crashes.py

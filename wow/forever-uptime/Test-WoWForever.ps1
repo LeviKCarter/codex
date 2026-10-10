@@ -118,6 +118,28 @@ try {
     $names = @(Get-ChildItem $kept | Sort-Object Name | ForEach-Object Name)
     Check 'only the newest ten logs stay' ($names.Count -eq 10 -and $names[-1] -eq 'taint-2026-10-09_19.00.00.log' -and $names[0] -eq 'taint-2026-09-05_10.00.00.log')
 
+    # Addon hooks: an update puts them back, the next start takes them out again.
+    $addon = "$beta\Interface\AddOns\DungeonJourney"
+    New-Item -ItemType Directory -Path "$addon\API" -Force | Out-Null
+    Set-Content -LiteralPath "$addon\DungeonJourney.toc" -Value '## Version: 9.9.9'
+    $hook = '        if WorldMapFrame.SetMapID then pcall(hooksecurefunc,WorldMapFrame,"SetMapID",function() DJ.MapPins:Refresh() end) end'
+    [IO.File]::WriteAllText("$addon\API\MapPins.lua", "local a = 1`r`n$hook`r`nlocal b = 2`r`n", $utf8)
+    Set-Content -LiteralPath "$dir\game-running.txt" -Value 'yes'; Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'game open: its addons are left alone' ((Test-Path "$dir\launched.txt") -and [IO.File]::ReadAllText("$addon\API\MapPins.lua", $utf8).Contains($hook))
+    Remove-Item "$dir\game-running.txt"; Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    $patched = [IO.File]::ReadAllText("$addon\API\MapPins.lua", $utf8)
+    Check 'an addon''s hook on a Blizzard frame method is taken out before the game starts' ((Test-Path "$dir\launched.txt") -and !$patched.Contains('hooksecurefunc,') -and $patched.Contains('Forever patch') -and $patched.StartsWith("local a = 1`r`n") -and $patched.EndsWith("local b = 2`r`n"))
+    Check 'the addon''s own file is kept' ([IO.File]::ReadAllText("$beta\hook-patch-backups\DungeonJourney-9.9.9\API\MapPins.lua", $utf8).Contains($hook))
+    Check 'a patch that fits says nothing' (!(Test-Path "$dir\said-misfit.txt"))
+    [IO.File]::WriteAllText("$addon\API\MapPins.lua", "pcall(hooksecurefunc, WorldMapFrame, 'SetMapID', Refresh)`r`n", $utf8); Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'an addon that no longer fits its patch: said, file untouched, the game still starts' ((Test-Path "$dir\launched.txt") -and (Get-Content "$dir\said-misfit.txt" -Raw) -like '*DungeonJourney 9.9.9 API/MapPins.lua: NOT PATCHED*' -and [IO.File]::ReadAllText("$addon\API\MapPins.lua", $utf8).StartsWith('pcall(hooksecurefunc, WorldMapFrame'))
+    Remove-Item "$dir\said-misfit.txt"; Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'the same misfit is said once' ((Test-Path "$dir\launched.txt") -and !(Test-Path "$dir\said-misfit.txt"))
+
     Remove-Item -LiteralPath $beta -Recurse -Force; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'no game folder: the game still starts' ($p.HasExited -and (Test-Path "$dir\launched.txt"))

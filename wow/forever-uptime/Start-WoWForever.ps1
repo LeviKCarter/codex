@@ -1,6 +1,7 @@
 # What the taskbar shortcut and the "back up" notification run: take the red dot off, make sure the game is on
 # Blizzard's current build (wait for Battle.net to finish, or say the game is out of date), keep the last session's
-# taint log, then start the game through the Steam launcher. ASCII only.
+# taint log, take addons' hooks off Blizzard's frame methods, then start the game through the Steam launcher.
+# ASCII only.
 param([string]$Uri = '', [switch]$Check)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
@@ -85,5 +86,13 @@ try {
 if ($go) {
     # Keep the last session's taint log and leave the log on for this one. Never in the way of the game starting.
     try { if (!(Test-GameRunning)) { Save-TaintLog; Set-TaintLogging } } catch { }
+    # Take the addons off Blizzard's frame methods again; say so when an update no longer fits the patches.
+    try {
+        $misfit = if (!(Test-GameRunning)) { Repair-AddonHooks }
+        if ($misfit) {
+            if ($script:TestDir) { Set-Content -LiteralPath (Join-Path $script:TestDir 'said-misfit.txt') -Value $misfit }
+            else { [Windows.Forms.MessageBox]::Show("An addon update no longer fits its hook patch, so its hooks are back:`n`n$misfit`n`nThe game starts now. Ask Claude to update wow\addon-hook-patches.", 'WoW Forever') | Out-Null }
+        }
+    } catch { }
     & $launcher
 }

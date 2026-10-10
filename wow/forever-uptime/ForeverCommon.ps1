@@ -58,6 +58,17 @@ function Set-TaintLogging {
     [IO.File]::WriteAllText($config, $text, (New-Object Text.UTF8Encoding $false))
 }
 
+# An addon update puts back the hooks on Blizzard's frame methods that ..\addon-hook-patches takes out, so the
+# patcher runs before every launch. Returns its report when an addon no longer fits its patches (said once per
+# version of the file), else nothing.
+function Repair-AddonHooks {
+    $patcher = Join-Path $PSScriptRoot '..\addon-hook-patches\patch_addon_hooks.py'
+    $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+    if (!$python -or !(Test-Path -LiteralPath $patcher)) { return }
+    $report = & $python $patcher --addons (Join-Path $script:BetaDir 'Interface\AddOns')
+    if ($LASTEXITCODE -eq 2) { return ($report -join "`n") }
+}
+
 # The build Battle.net last finished installing: the product's row in the game folder's .build.info.
 function Get-InstalledBuild {
     $lines = Get-Content -LiteralPath (Join-Path $script:WowRoot '.build.info')
