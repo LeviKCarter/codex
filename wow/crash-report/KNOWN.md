@@ -24,6 +24,10 @@ remove what turns out wrong, and say when something is only a suspicion.
   from X" is the addon whose value was touched, which is not always the addon whose code is wrong.
 - One hang (2026-10-08 22:25) was caused by a `/run` command typed in chat: `/run` and `/script` taint whatever they
   touch.
+- Test running since 2026-10-09 18:10: Bagnon and its parts (Bagnon, Bagnon_Bank, Bagnon_Config, Bagnon_GuildBank,
+  BagBrother) are switched off for both characters, after the 17:54 hang's log blamed Bagnon. A hang after that
+  time with no Bagnon entry in the taint log means Bagnon was not the cause: say so plainly, and name what the log
+  blames instead. If the log still shows Bagnon, it was switched back on.
 - Not yet done: a session with every addon off, to separate Blizzard's own bug from addon taint.
 
 ## Crashes with a crash text (Errors folder)
