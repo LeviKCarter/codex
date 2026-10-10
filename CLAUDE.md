@@ -16,6 +16,9 @@ The full procedure is the PulseOps `CLAUDE.md`, imported here so it applies to e
 a PR here) proves the change, commits, pushes, opens the PR, merges it by hand and
 verifies the change live. `/ship check` runs only the proof gate.
 
+`/archive-finished` (global, same junction setup, `skills/archive-finished`) archives the desktop sessions whose work
+is done and removes the PulseOps worktrees that merged work left behind. `/archive-finished check` changes nothing.
+
 ## 3. UI work: the Impeccable skill and agents
 
 For any dashboard/front-end design task use the `impeccable` skill (`PulseOps\.claude\skills\impeccable`) and its
