@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pulse Ops — Uber trip history
 // @namespace    levi.pulseops.uber-history
-// @version      1.1.0
+// @version      1.2.0
 // @updateURL    https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @downloadURL  https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @description  Hands the trips on Uber's driver site (pay, tip, miles, minutes) to Pulse Ops on this PC, one pay week at a time and slowly, for the weeks Pulse Ops still lacks.
@@ -11,6 +11,7 @@
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_registerMenuCommand
+// @grant        window.close
 // @connect      localhost
 // @connect      127.0.0.1
 // @noframes
@@ -41,6 +42,12 @@
 
   const RUN_EVERY_MS = 6 * 60 * 60 * 1000; // a run by itself at most this often
   const START_DELAY_MS = 8000; // after the page loads, so the site's own requests go first
+  // The PC's weekly task ("Pulse Ops Uber Trip Pull", Mondays after Uber's pay week ends) opens the driver site with
+  // this mark (Levi, 2026-10-13: "close the uber tab when it's done pulling"). Such a tab closes itself once its run
+  // has ended by itself, or at once when no run is due; a run Uber or the PC stopped, or one he stopped or paused,
+  // leaves it open with its line, for him to see. A tab he opened himself never closes.
+  const BY_TASK = typeof location.hash === "string" && location.hash === "#pulse-weekly";
+  const CLOSE_AFTER_MS = 10000; // the last line stays this long first
   // Between Uber requests: 30 s plus up to 30 s more. A run has no stop of its own any more, so this gap is all
   // that holds it back: slower than any run before it (4 to 8 s by the clock, about 30 s in a hidden tab).
   const GAP_MIN_MS = 30000;
@@ -722,6 +729,7 @@
       noteOpen(job, false);
       job.beat = setInterval(() => beat(job), LOCK_BEAT_MS);
       end(job, await pull(job), false);
+      job.done = true;
     } catch (error) {
       if (error instanceof Stopped) {
         if (error.why === "lost") end(job, `Pulse: another driver-site tab took over${sentPart(job)}.`, false);
@@ -753,9 +761,22 @@
         if (mine) closeRun();
       }
       if (current === job) current = null;
+      // Only a run that ended by itself: Uber, the PC, a Stop or a pause end it by throwing, before `done`.
+      if (job.done) closeByTask();
       paused = false;
       render();
     }
+  }
+
+  // The weekly task's tab goes, its last line left up for a few seconds first (BY_TASK). Once only.
+  let closing = false;
+  function closeByTask() {
+    if (!BY_TASK || closing) return;
+    closing = true;
+    setTimeout(() => {
+      if (current) { closing = false; return; } // a run began meanwhile ("Pull Uber trips now"): it closes after
+      try { window.close(); } catch { /* the tab stays: nothing else to do */ }
+    }, CLOSE_AFTER_MS);
   }
 
   function stop() {
@@ -815,7 +836,10 @@
   GM_registerMenuCommand("Pull Uber trips now", () => { run(true); });
   GM_registerMenuCommand("Stop", stop);
 
-  setTimeout(maybeRun, START_DELAY_MS);
+  setTimeout(() => {
+    maybeRun();
+    if (!current) closeByTask(); // nothing due: the task's tab has nothing to do
+  }, START_DELAY_MS);
   // A tab left open carries on a run that was cut, and starts the next run when it is due, with no page load and
   // nobody looking at it. Not once Uber has stopped a run: the next then waits for the site to be opened or looked
   // at, as the line says, so Uber's check is not met again and again with nobody there to clear it.
