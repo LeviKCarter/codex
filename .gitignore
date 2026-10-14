@@ -16,6 +16,8 @@
 !skills/ship/**
 !skills/archive-finished/
 !skills/archive-finished/**
+!skills/spotify-artists/
+!skills/spotify-artists/**
 # Userscripts published from this repo, each opted in by name: any other folder or file under userscripts/ (the
 # PC's local block-filter extension source, for one) stays ignored.
 !userscripts/
