@@ -109,3 +109,9 @@ Ops keeps the trips in `uber-trips.json` (`app/uberTrips.ts`, `api/uber-trips` i
   look at it, drivers.uber.com is on this PC's Chrome list at Settings > Performance > "Always keep these sites
   active" (added 2026-10-07 at Levi's word). The setting is his; on another browser or profile it has to be added
   again.
+- It only pulls while a driver-site page is open. The PC's scheduled task "Pulse Ops Uber Trip Pull" (Mondays
+  11:00 AM, after Uber's pay week ends at 4 AM; registered 2026-10-13, not from a script in either repo) opens
+  `https://drivers.uber.com/earnings/activities#pulse-weekly` in Chrome. Since 1.2.0 a tab with that `#pulse-weekly`
+  closes itself (`@grant window.close`) 10 s after a run that ended by itself, or as soon as it finds no run due
+  (Levi, 2026-10-13: "close the uber tab when it's done pulling"). A run Uber, the PC, a Stop or a pause ended leaves
+  it open with its line. A tab he opened himself never closes.

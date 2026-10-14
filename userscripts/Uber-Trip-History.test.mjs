@@ -95,8 +95,9 @@ const prelude = `
 `;
 
 // A tab on drivers.uber.com with the script running in it.
-function openTab(world) {
-  const tab = { id: ++world.tabs, dead: false, stalled: false, line: null, commands: {}, heard: { window: {}, document: {} } };
+// `hash`: what follows the address ("#pulse-weekly" from the PC's weekly task). A tab the script closes is `closed`.
+function openTab(world, { hash = "" } = {}) {
+  const tab = { id: ++world.tabs, dead: false, stalled: false, closed: false, line: null, commands: {}, heard: { window: {}, document: {} } };
   const later = (fn, ms, every, net) => {
     const id = ++world.timerId;
     world.timers.push({ id, at: world.now + Math.max(0, Number(ms) || 0), fn, every: every ? Math.max(1, Number(ms) || 0) : 0, tab, net: !!net });
@@ -113,9 +114,9 @@ function openTab(world) {
   const context = vm.createContext({
     __now: () => world.now,
     __random: () => world.random,
-    window: { addEventListener: hear("window") },
+    window: { addEventListener: hear("window"), close: () => { tab.closed = true; tab.dead = true; } },
     document: tab.document,
-    location: { origin: "https://drivers.uber.com" },
+    location: { origin: "https://drivers.uber.com", hash },
     crypto: { randomUUID: () => `tab-${tab.id}` },
     AbortController,
     setTimeout: (fn, ms) => later(fn, ms, false),
@@ -1027,6 +1028,59 @@ function seeded(seed) {
 // no week is handed over with fewer rows than Uber has for it, or twice; no two Uber requests are less than thirty
 // seconds apart, whichever tabs they came from; once Uber has stopped a run nothing is asked for six hours, unless he
 // pulls from the menu; and with one tab left open and looked at now and then, every week gets in.
+// ---------- the weekly task's tab ----------
+
+const BY_TASK = { hash: "#pulse-weekly" };
+
+test("the weekly task's tab closes itself once the week is in; a tab he opened stays", async () => {
+  const world = makeWorld({ "2026-08-10": 25 });
+  const tab = openTab(world, BY_TASK);
+  await until(world, () => post(world, "2026-08-10").length === 1, 15 * MINUTE, "the week handed over");
+  whole(world, "2026-08-10", 25);
+  assert.equal(tab.closed, false, "its last line stays up a few seconds");
+  assert.match(tab.status(), /every week is in/);
+  await advance(world, 11 * SECOND);
+  assert.equal(tab.closed, true);
+  const own = makeWorld({ "2026-08-10": 25 });
+  const his = openTab(own);
+  await advance(own, HOUR);
+  whole(own, "2026-08-10", 25);
+  assert.equal(his.closed, false);
+});
+
+test("the weekly task's tab with no run due asks Uber nothing and closes", async () => {
+  const world = makeWorld({ "2026-08-10": 25 });
+  world.store.set("lastRun", JSON.stringify(world.now - HOUR)); // a run an hour ago: the next is five hours on
+  const tab = openTab(world, BY_TASK);
+  await advance(world, 30 * SECOND);
+  assert.equal(asked(world), 0);
+  assert.equal(tab.closed, true);
+});
+
+test("the weekly task's tab stays open when Uber, the PC or he stopped the run", async () => {
+  // Uber's check.
+  const refused = makeWorld({ "2026-08-10": 30 });
+  refused.uber.rule = (request, count) => (count === 2 ? { status: 403, text: "<html>challenge</html>" } : null);
+  const a = openTab(refused, BY_TASK);
+  await advance(refused, 30 * MINUTE);
+  assert.equal(a.closed, false);
+  assert.match(a.status(), /Uber/);
+  // The PC not there at all.
+  const down = makeWorld({ "2026-08-10": 30 });
+  down.pc.down = true;
+  const b = openTab(down, BY_TASK);
+  await advance(down, 30 * MINUTE);
+  assert.equal(b.closed, false);
+  assert.notEqual(b.status(), "");
+  // His Stop from the menu.
+  const stopped = makeWorld({ "2026-08-10": 300 });
+  const c = openTab(stopped, BY_TASK);
+  await until(stopped, () => asked(stopped) === 2, 10 * MINUTE, "two pages asked");
+  c.commands.Stop();
+  await advance(stopped, 10 * MINUTE);
+  assert.equal(c.closed, false);
+});
+
 async function randomRun(seed) {
   const rand = seeded(seed);
   const pick = (list) => list[Math.floor(rand() * list.length)];
