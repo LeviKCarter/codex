@@ -6,18 +6,48 @@ $script:Shortcut = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Lau
 $script:DotIcon = Join-Path $PSScriptRoot 'WowB-dot.ico'
 $script:BattleNet = 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'
 $script:Launcher = 'C:\Users\levik\Documents\Codex\2026-10-09\can-x20\outputs\Launch-WoW-Steam.ps1'
-# Tests set WOWFOREVER_TEST_DIR: build files, shortcut and launcher are then read from that folder, the build list
-# from its "versions" file, and Battle.net is never started.
+# Updates the CurseForge addons and closes CurseForge again; last line OK, NOTHING or FAILED: <why>.
+$script:CurseForgeUpdater = Join-Path $PSScriptRoot 'Update-CurseForgeAddons.ps1'
+# Seconds the updater gets before the game starts without it (the update itself took 21 s for 7 addons on 2026-10-17).
+$script:CurseForgeTimeoutSec = 240
+# Past that, the updater still closes CurseForge; this many seconds more and the launcher stops both itself.
+$script:CurseForgeGraceSec = 30
+# Tests set WOWFOREVER_TEST_DIR: build files, shortcut, launcher and CurseForge updater are then read from that folder,
+# the build list from its "versions" file, and Battle.net is never started.
 $script:TestDir = $env:WOWFOREVER_TEST_DIR
 if ($script:TestDir) {
     $script:WowRoot = $script:TestDir
     $script:Shortcut = Join-Path $script:TestDir 'WoW Forever.lnk'
     $script:DotIcon = Join-Path $script:TestDir 'WowB-dot.ico'
     $script:Launcher = Join-Path $script:TestDir 'launcher.ps1'
+    $script:CurseForgeUpdater = Join-Path $script:TestDir 'curseforge.ps1'
+    if ($env:WOWFOREVER_CF_TIMEOUT) { $script:CurseForgeTimeoutSec = [int]$env:WOWFOREVER_CF_TIMEOUT; $script:CurseForgeGraceSec = 2 }
 }
 $script:BetaDir = Join-Path $script:WowRoot '_classic_beta_'
 $script:TaintLevel = 2       # 1 = blocked actions only, 2 = also who tainted what (needed to find the addon behind a hang)
 $script:TaintLogsKept = 10
+# Memory Windows must still be able to hand out before the game starts. On 2026-10-17 it crashed out of memory a
+# minute in with 2.4 GB free (the Claude app had grown to 19.5 GB), and it takes about 6.6 GB within minutes.
+$script:MinFreeGB = 10
+# While the game is open, Watch-Memory.ps1 warns below this much free, at most once every so many minutes.
+$script:WarnFreeGB = 5
+$script:WarnEveryMinutes = 15
+# ..\patch-day\patch_day.py writes this file while Claude fixes the addons for a new patch. A file older than this
+# many minutes is a run that died; it never holds the game back.
+$script:PatchCheck = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-patch-day-running.txt'
+if ($script:TestDir) { $script:PatchCheck = Join-Path $script:TestDir 'patch-check.txt' }
+$script:PatchCheckMinutes = 90
+
+# The patch check that is running now: Label (the build) and Started, or $null.
+function Get-PatchCheck {
+    if (!(Test-Path -LiteralPath $script:PatchCheck)) { return $null }
+    $item = Get-Item -LiteralPath $script:PatchCheck
+    if (((Get-Date) - $item.LastWriteTime).TotalMinutes -gt $script:PatchCheckMinutes) { return $null }
+    $cells = ([IO.File]::ReadAllText($item.FullName)).Trim().Split('|')
+    $started = $item.LastWriteTime
+    if ($cells.Count -gt 1) { try { $started = [DateTime]::Parse($cells[1]) } catch { } }
+    return [pscustomobject]@{ Label = $cells[0]; Started = $started }
+}
 
 # $true while the game is open; its files are only touched when it is not. Tests: a game-running.txt in the folder.
 function Test-GameRunning {
@@ -69,6 +99,55 @@ function Repair-AddonHooks {
     if ($LASTEXITCODE -eq 2) { return ($report -join "`n") }
 }
 
+# ..\addon-guard\addon_guard.py: --scan finds addon code an update brought in that breaks the controller, or blocked
+# controller calls from the last sessions, and exits 3 when there is something new; --fix then has Claude fix it,
+# writing the patch-check file while it works. Returns $true once that fix is running (Get-PatchCheck sees it).
+# Tests: guard.ps1 in the test folder stands in for both (-Mode scan / -Mode fix); without it nothing runs.
+function Start-AddonGuard {
+    $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    if ($script:TestDir) {
+        $guard = Join-Path $script:TestDir 'guard.ps1'
+        if (!(Test-Path -LiteralPath $guard)) { return $false }
+        & $ps -NoProfile -ExecutionPolicy Bypass -File $guard -Mode scan | Out-Null
+        if ($LASTEXITCODE -ne 3) { return $false }
+        Start-Process -FilePath $ps -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -File "{0}" -Mode fix' -f $guard) -WindowStyle Hidden | Out-Null
+    } else {
+        $guard = Join-Path $PSScriptRoot '..\addon-guard\addon_guard.py'
+        $python = (Get-Command python -ErrorAction SilentlyContinue).Source
+        if (!$python -or !(Test-Path -LiteralPath $guard)) { return $false }
+        & $python $guard --scan | Out-Null
+        if ($LASTEXITCODE -ne 3) { return $false }
+        Start-Process -FilePath $python -ArgumentList ('"{0}" --fix' -f $guard) -WindowStyle Hidden | Out-Null
+    }
+    # The fix writes the patch-check file as it starts; one that never does is not waited for.
+    foreach ($i in 1..40) {
+        if (Get-PatchCheck) { return $true }
+        Start-Sleep -Milliseconds 250
+    }
+    return $false
+}
+
+# The game empties Logs\taint.log at every login and /reload, so a session's log is gone before anyone reads it.
+# While the game is open, Watch-Memory.ps1 calls this on each check: the log is copied to Logs\taint-live whenever it
+# grew, one file per session (a shorter log than last time is a new session), newest $script:TaintLogsKept kept.
+# $State is a hashtable the caller keeps between calls.
+function Copy-LiveTaintLog($State) {
+    $log = Join-Path $script:BetaDir 'Logs\taint.log'
+    if (!(Test-Path -LiteralPath $log)) { return }
+    $size = (Get-Item -LiteralPath $log).Length
+    $last = if ($State.ContainsKey('Size')) { $State.Size } else { 0 }
+    if ($size -lt $last -or !$State.ContainsKey('File')) {
+        $State.File = 'taint-live-{0:yyyy-MM-dd_HH.mm.ss}.log' -f (Get-Date)
+    }
+    $State.Size = $size
+    if ($size -eq 0 -or $size -eq $last) { return }
+    $live = Join-Path $script:BetaDir 'Logs\taint-live'
+    New-Item -ItemType Directory -Path $live -Force | Out-Null
+    Copy-Item -LiteralPath $log -Destination (Join-Path $live $State.File) -Force
+    Get-ChildItem -LiteralPath $live -Filter 'taint-live-*.log' | Sort-Object Name -Descending |
+        Select-Object -Skip $script:TaintLogsKept | Remove-Item -Force
+}
+
 # The build Battle.net last finished installing: the product's row in the game folder's .build.info.
 function Get-InstalledBuild {
     $lines = Get-Content -LiteralPath (Join-Path $script:WowRoot '.build.info')
@@ -92,6 +171,39 @@ function Get-CurrentBuild {
         if ($row.Count -lt 6 -or $row[1].Length -ne 32) { return $null }
         return [pscustomobject]@{ Key = $row[1]; Version = $row[5] }
     } catch { return $null }
+}
+
+# How much memory Windows can still hand out (committed memory: RAM plus page file), and the three programs holding
+# the most. Tests: a "memory" file, first line the free GB, then one "name GB" line per program; none = $null.
+function Get-MemoryState {
+    if ($script:TestDir) {
+        $path = Join-Path $script:TestDir 'memory'
+        if (!(Test-Path -LiteralPath $path)) { return $null }
+        $lines = @(Get-Content -LiteralPath $path)
+        $top = $lines | Select-Object -Skip 1 | ForEach-Object { $cells = $_.Split(' '); [pscustomobject]@{ Name = $cells[0]; GB = [double]$cells[1] } }
+        return [pscustomobject]@{ FreeGB = [double]$lines[0]; Top = @($top) }
+    }
+    $os = Get-CimInstance Win32_OperatingSystem
+    $top = Get-Process | Group-Object Name |
+        ForEach-Object { [pscustomobject]@{ Name = $_.Name; GB = ($_.Group | Measure-Object PagedMemorySize64 -Sum).Sum / 1GB } } |
+        Sort-Object GB -Descending | Select-Object -First 3
+    return [pscustomobject]@{ FreeGB = $os.FreeVirtualMemory / 1MB; Top = @($top) }
+}
+
+# "claude 19.5 GB, chrome 4.7 GB, SignalRgb 4.6 GB"
+function Format-MemoryTop($state) {
+    return (($state.Top | ForEach-Object { '{0} {1:N1} GB' -f $_.Name, $_.GB }) -join ', ')
+}
+
+# Closes CurseForge and its mods agent (Curse.Agent.Host). Tests: a curseforge-stopped.txt in the folder.
+function Stop-CurseForge {
+    if ($script:TestDir) { Add-Content -LiteralPath (Join-Path $script:TestDir 'curseforge-stopped.txt') -Value 'stopped'; return }
+    Get-Process -Name CurseForge -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    # The agent stops by itself once the app is gone, and the app's helper processes take a moment to go: give them
+    # the time to, then stop what is left.
+    $until = (Get-Date).AddSeconds(15)
+    while ((Get-Process -Name CurseForge, Curse.Agent.Host -ErrorAction SilentlyContinue) -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 500 }
+    Get-Process -Name CurseForge, Curse.Agent.Host -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
 function Start-BattleNet {
