@@ -1,0 +1,786 @@
+[
+ {
+  "addon": "AuctionatorForeverPrices",
+  "file": "Scanner.lua",
+  "text": "hooked = pcall(hooksecurefunc, C_AuctionHouse, \"SendBrowseQuery\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/currencyTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetBackpackToken', self.OnTracked)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/currencyTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetCurrencyTokenByID', self.OnID)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/itemTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetQuestItem', self.OnQuest)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/itemTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetQuestLogItem', self.OnQuest)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/itemTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetCraftItem', self.OnSetCraftItem)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "core/features/itemTooltips.lua",
+  "text": "hooksecurefunc(frame, 'SetTradeSkillItem', self.OnSetTradeSkillItem)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BagBrother",
+  "file": "libs/C_Everywhere/C_Everywhere.lua",
+  "text": "C.TooltipInfo.hooksecurefunc = function(k, f) hooksecurefunc(meta, 'S' .. k:sub(2), f) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BetterMusicPlayer",
+  "file": "core/UI.lua",
+  "text": "func = function() StaticPopup_Show(\"BMP_NEW_PLAYLIST\") end,",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BetterMusicPlayer",
+  "file": "core/UI.lua",
+  "text": "StaticPopup_Show(\"BMP_RENAME_PLAYLIST\", nil, nil, node.listIndex)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "BetterMusicPlayer",
+  "file": "core/UI.lua",
+  "text": "StaticPopup_Show(\"BMP_NEW_PLAYLIST\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "DungeonJourney",
+  "file": "API/MapPins.lua",
+  "text": "local pin=self:AcquirePin(canvas)",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "DungeonJourney",
+  "file": "UI/Settings.lua",
+  "text": "StaticPopup_Show(\"DUNGEONJOURNEY_RELOAD_LANGUAGE\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverLayerHop",
+  "file": "ForeverLayerHop.lua",
+  "text": "local ok = pcall(hooksecurefunc, frame, \"SetAlpha\", function(self, alpha)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverLayerHop",
+  "file": "ForeverLayerHop.lua",
+  "text": "local ok = pcall(hooksecurefunc, mixin, \"UpdateNameFrame\", function(entry)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverLayerHop",
+  "file": "ForeverLayerHop.lua",
+  "text": "StaticPopup_Show(FLH.LEAVE_HOP_POPUP, FLH.plainLayerDisplay(anchorKey))",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverLayerHop",
+  "file": "ForeverLayerHop.lua",
+  "text": "local ok = pcall(hooksecurefunc, GameTooltip, \"SetUnit\", function(self, unit)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverVO",
+  "file": "Core/Events.lua",
+  "text": "hooksecurefunc(C_GossipInfo, \"SelectOption\", function(optionID)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverVO",
+  "file": "Core/Events.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"AbandonQuest\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverVO",
+  "file": "Core/Settings.lua",
+  "text": "hooksecurefunc(frame, \"Init\", function(header, other)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverVO",
+  "file": "UI/Debug.lua",
+  "text": "hooksecurefunc(head, \"Present\", function(_, item)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "ForeverVO",
+  "file": "UI/Debug.lua",
+  "text": "hooksecurefunc(head, \"CloseFrame\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "convergences.lua",
+  "text": "if GameTooltip ~= nil and GameTooltip.SetMinimapMouseover ~= nil then hooksecurefunc(GameTooltip, \"SetMinimapMouseover\", Convergence.OnMinimapMouseover) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4FrameTools.lua",
+  "text": "hooksecurefunc(target, \"SetAlpha\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4Lib.lua",
+  "text": "if TargetFrameHealthBar and TargetFrameTextureFrame.HealthBarText then hooksecurefunc(TargetFrameHealthBar, \"UpdateTextStringWithValues\", TextStatusBar_UpdateTextStringWithValues) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4Lib.lua",
+  "text": "if TargetFrameManaBar and TargetFrameTextureFrame.ManaBarText then hooksecurefunc(TargetFrameManaBar, \"UpdateTextStringWithValues\", TextStatusBar_UpdateTextStringWithValues) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4Lib.lua",
+  "text": "if FocusFrameHealthBar and FocusFrameTextureFrame.HealthBarText then hooksecurefunc(FocusFrameHealthBar, \"UpdateTextStringWithValues\", TextStatusBar_UpdateTextStringWithValues) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4Lib.lua",
+  "text": "if FocusFrameManaBar and FocusFrameTextureFrame.ManaBarText then hooksecurefunc(FocusFrameManaBar, \"UpdateTextStringWithValues\", TextStatusBar_UpdateTextStringWithValues) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4Lib.lua",
+  "text": "Menu.ModifyMenu(menuType, function(ownerRegion, rootDescription, contextData) SetupRoleMenu(ownerRegion, rootDescription, contextData, \"target\") end)",
+  "rule": "menu-modify",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4MinimapButtons.lua",
+  "text": "hooksecurefunc(btn, \"SetParent\", function() BtnThink() end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "MapUtils",
+  "file": "libs/D4Lib/D4MinimapButtons.lua",
+  "text": "hooksecurefunc(btn, \"SetPoint\", function() BtnThink() end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceComm-3.0/ChatThrottleLib.lua",
+  "text": "hooksecurefunc(_G.C_ChatInfo, \"SendChatMessage\", function(...)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceComm-3.0/ChatThrottleLib.lua",
+  "text": "hooksecurefunc(_G.C_ChatInfo, \"SendAddonMessage\", function(...)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceComm-3.0/ChatThrottleLib.lua",
+  "text": "hooksecurefunc(_G.C_ChatInfo, \"SendAddonMessageLogged\", function(...)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceComm-3.0/ChatThrottleLib.lua",
+  "text": "hooksecurefunc(_G.C_BattleNet, \"SendGameData\", function(...)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(appName, rootframe, unpack(basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(user.appName, user.rootframe, unpack(basepath))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(user.appName, unpack(basepath))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(appName, unpack(user.basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(widget:GetUserData(\"appName\"), widget, unpack(user.basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "function AceConfigDialog:Open(appName, container, ...)",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(widget:GetUserData(\"appName\"), widget, unpack(path or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceGUI-3.0/widgets/AceGUIWidget-EditBox.lua",
+  "text": "hooksecurefunc(ChatFrameUtil, \"InsertLink\", function(...) return _G.AceGUIEditBoxInsertLink(...) end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/AceGUI-3.0/widgets/AceGUIWidget-MultiLineEditBox.lua",
+  "text": "hooksecurefunc(ChatFrameUtil, \"InsertLink\", function(...) return _G.AceGUIMultiLineEditBoxInsertLink(...) end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/HereBeDragons/HereBeDragons-Pins-2.0.lua",
+  "text": "self:GetMap():AcquirePin(\"HereBeDragonsPinsTemplateQuestie\", icon, x, y, data.frameLevelType)",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Libs/HereBeDragons/HereBeDragons-Pins-2.0.lua",
+  "text": "WorldMapFrame:AddDataProvider(worldmapProvider)",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/GameVersionError.lua",
+  "text": "StaticPopup_Show(\"QUESTIE_VERSION_ERROR\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Options/QuestieOptions.lua",
+  "text": "AceConfigDialog:Open(\"Questie\", configFrame) -- load the options into configFrame",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Options/QuestieOptions.lua",
+  "text": "AceConfigDialog:Open(\"Questie\", QuestieConfigFrame)",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/LinePool/TrackerMenu.lua",
+  "text": "StaticPopup_Show(\"ABANDON_QUEST_WITH_ITEMS\", QuestieCompat.GetAbandonQuestName(), items)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/LinePool/TrackerMenu.lua",
+  "text": "StaticPopup_Show(\"ABANDON_QUEST\", QuestieCompat.GetAbandonQuestName())",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/QuestieTracker.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"AddQuestWatch\", DisabledWatchRefresh)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/QuestieTracker.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"RemoveQuestWatch\", DisabledWatchRefresh)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/QuestieTracker.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"AddQuestWatch\", function(questId)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/Tracker/QuestieTracker.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"RemoveQuestWatch\", function(questId)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/VersionCheck.lua",
+  "text": "StaticPopup_Show(\"QUESTIE_ADDON_NAME_ERROR\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Questie",
+  "file": "Modules/WorldMapButton/WorldMapButton.lua",
+  "text": "AceConfigDialog:Open(\"Questie\", _G.QuestieConfigFrame)",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "Bootstrap.lua",
+  "text": "hooksecurefunc(QuestieLoader, \"ImportModule\", function(_, moduleName)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ContinentOverview.lua",
+  "text": "if visible then overlay:AcquirePin(nil,r.icon,r.position.x,r.position.y) end",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "hooksecurefunc(glow, \"SetVertexColor\", QFG.Compat.Guard(\"map.marker.glow\", function(_, r, g, b, a)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "hooksecurefunc(icon.texture, \"SetVertexColor\", function(_, r, g, b, a)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "hooksecurefunc(icon.texture, method, function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "if type(icon.FakeHide) == \"function\" then hooksecurefunc(icon, \"FakeHide\", SyncIcon) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "if type(icon.FakeShow) == \"function\" then hooksecurefunc(icon, \"FakeShow\", SyncIcon) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "if type(icon.Unload) == \"function\" then hooksecurefunc(icon, \"Unload\", QFG.Compat.Guard(\"map.marker.unload\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "if type(pins[method]) == \"function\" then hooksecurefunc(pins, method, Added) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "hooksecurefunc(map.utils, \"RescaleIcon\", QFG.Compat.Guard(\"map.marker.resize\", function(ref)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "ModernMode.lua",
+  "text": "if type(pins[method]) == \"function\" then hooksecurefunc(pins, method, function() dirty = true end) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "NavigationArrow.lua",
+  "text": "if type(pins[method]) == \"function\" then hooksecurefunc(pins, method, function() dirty = true end) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "Pins.lua",
+  "text": "self:GetMap():AcquirePin(\"HereBeDragonsPinsTemplateQuestie\", icon, x, y, data.frameLevelType)",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "Pins.lua",
+  "text": "WorldMapFrame:AddDataProvider(worldmapProvider)",
+  "rule": "map-pins",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "QuestieTrackerNavigation.lua",
+  "text": "local ok,reason=pcall(hooksecurefunc,utils,key,Compat.Guard(\"tracker.questie-navigation.\"..key,callback))",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "QuestieForeverGamepad",
+  "file": "QuestMarkerLifecycle.lua",
+  "text": "hooksecurefunc(lifecycle,\"AbandonQuest\",Compat.Guard(\"map.abandon-visibility\",function(_,id)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "SkyborneLeyLineConvergenceMarker",
+  "file": "SkyborneLeyLineConvergenceMarker.lua",
+  "text": "StaticPopup_Show(\"SKYBORNE_MARKER_SHARE\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Compat.lua",
+  "text": "hooksecurefunc(GameTooltip, \"SetOwner\", function(self, owner, anchor)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Compat.lua",
+  "text": "hooksecurefunc(self, \"ClearModel\", function(self)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Compat.lua",
+  "text": "hooksecurefunc(self, \"SetSequence\", function(self, sequence)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Compat.lua",
+  "text": "hooksecurefunc(PlayerFrame, \"InitDisplay\", function(self)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Compat.lua",
+  "text": "hooksecurefunc(PlayerFrame, \"InitPortrait\", function(self)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "Core.lua",
+  "text": "StaticPopup_Show(\"SPOKEN_OLD_FOLDERS\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "UI/DialogueUITheme.lua",
+  "text": "hooksecurefunc(frame, name, fn)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "UI/Layout.lua",
+  "text": "StaticPopup_Show(\"SPOKEN_LAYOUT_CONFIRM\", question)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken",
+  "file": "UI/Options.lua",
+  "text": "layout:Button(L.OPT_PROFILE_NEW, 200, function() StaticPopup_Show(\"SPOKEN_NEW_PROFILE\") end)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Places",
+  "file": "Core.lua",
+  "text": "hooksecurefunc(WorldMapFrame, \"OnMapChanged\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Places",
+  "file": "UI/CopyLink.lua",
+  "text": "StaticPopup_Show(POPUP, caption or \"Copy this address and open it in your browser.\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Compatibility.lua",
+  "text": "hooksecurefunc(GameTooltip, \"SetOwner\", function(self, owner, anchor)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Compatibility.lua",
+  "text": "hooksecurefunc(Addon, \"OnInitialize\", function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(appName, rootframe, unpack(basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(user.appName, user.rootframe, unpack(basepath))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(user.appName, unpack(basepath))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(appName, unpack(user.basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(widget:GetUserData(\"appName\"), widget, unpack(user.basepath or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "function AceConfigDialog:Open(appName, container, ...)",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceConfig-3.0/AceConfigDialog-3.0/AceConfigDialog-3.0.lua",
+  "text": "AceConfigDialog:Open(widget:GetUserData(\"appName\"), widget, unpack(path or emptyTbl))",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceGUI-3.0/widgets/AceGUIWidget-EditBox.lua",
+  "text": "hooksecurefunc(ChatFrameUtil, \"InsertLink\", function(...) return _G.AceGUIEditBoxInsertLink(...) end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Libs/AceGUI-3.0/widgets/AceGUIWidget-MultiLineEditBox.lua",
+  "text": "hooksecurefunc(ChatFrameUtil, \"InsertLink\", function(...) return _G.AceGUIMultiLineEditBoxInsertLink(...) end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Options.lua",
+  "text": "StaticPopup_Show(\"VOICEOVER_ERROR\", format([[Failed to load data module \"%s\". Reason: %s]], module.AddonName, reason and _G[\"ADDON_\" .. reason] or \"Unknown\"))",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Options.lua",
+  "text": "AceConfigDialog:Open(\"SpokenQuests\", self.frame)",
+  "rule": "ace-dialog",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "Player.lua",
+  "text": "StaticPopup_Show(\"VOICEOVER_ERROR\", L.OPT_REPORT_NO_LINE)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "ReportButton.lua",
+  "text": "StaticPopup_Show(COPY_DIALOG)",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "UI/DialogueUIBridge.lua",
+  "text": "hooksecurefunc(frame, name, Lower)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "UI/DialogueUIBridge.lua",
+  "text": "hooksecurefunc(frame, handler, function()",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "UI/OpenInCompendium.lua",
+  "text": "if type(_G[name]) == \"function\" then hooksecurefunc(name, Refresh) end",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "VoiceOver.lua",
+  "text": "StaticPopup_Show(\"VOICEOVER_NO_REGISTERED_DATA_MODULES\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "VoiceOver.lua",
+  "text": "StaticPopup_Show(\"VOICEOVER_REDUX_DUPLICATE_ADDON\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "VoiceOver.lua",
+  "text": "hooksecurefunc(C_QuestLog, \"AbandonQuest\", MakeAbandonQuestHook(\"questID\", function() return C_QuestLog.GetAbandonQuest() end))",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Quests",
+  "file": "VoiceOver.lua",
+  "text": "hooksecurefunc(C_GossipInfo, name, function(pick)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Readables",
+  "file": "UI/CopyLink.lua",
+  "text": "StaticPopup_Show(POPUP, caption or \"Copy this address and open it in your browser.\")",
+  "rule": "popup",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Readables",
+  "file": "UI/DialogueUIBook.lua",
+  "text": "hooksecurefunc(scroll, \"SetObjectData\", Handed)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Readables",
+  "file": "UI/DialogueUIBook.lua",
+  "text": "hooksecurefunc(view, \"RebuildContentFromCache\", function() Book:Invalidate() end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Readables",
+  "file": "UI/DialogueUIBook.lua",
+  "text": "hooksecurefunc(view, \"LayoutWidgets\", function() Book:PlaceTheirs() end)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ },
+ {
+  "addon": "Spoken_Readables",
+  "file": "UI/DialogueUIBook.lua",
+  "text": "hooksecurefunc(view, \"SetScrollContentHeight\", function(_, contentHeight, maxPage)",
+  "rule": "method-hook",
+  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
+ }
+]
