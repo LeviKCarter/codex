@@ -24,6 +24,13 @@ from pathlib import Path
 
 DEFAULT_ADDONS = Path(r"D:\Games\World of Warcraft\_classic_beta_\Interface\AddOns")
 MARK = "Forever patch"
+HERE = Path(__file__).resolve().parent
+
+
+def part(name: str) -> str:
+    """A patch text too long to keep inline, from a file beside this script."""
+    return (HERE / name).read_text(encoding="utf-8").replace("\r\n", "\n")
+
 
 # addon -> file -> [(what, old text, new text)]. Text uses \n; the file's own line ends are kept.
 PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
@@ -290,6 +297,33 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
+    # SkyborneLeyLineConvergenceMarker: its pins were Blizzard map pins (AddDataProvider / AcquirePin), and with the
+    # controller interface opening the map then blocked RunBinding(), DescendStop() and
+    # SetPreferredGamepadInteractTarget(), blamed on it: the face buttons stopped working (2026-10-03, again
+    # 2026-10-13 after the 0.3.1 update undid the hand patch). The pins become frames of its own on the canvas.
+    # 0.4.0 (2026-10-16) still registers Blizzard pins; it added Scan.lua before Pins.xml in the .toc, so the .toc
+    # patch matches the Pins.xml line alone.
+    "SkyborneLeyLineConvergenceMarker": {
+        "SkyborneLeyLineConvergenceMarker.lua": [
+            (
+                "pin template name",
+                'local PIN = "LeyLineMarkerPinTemplate"\n',
+                "-- Forever patch: no pin template, see the map pins below\n",
+            ),
+            (
+                "map data provider and pins",
+                part("skyborne/map-pins.original.lua"),
+                part("skyborne/map-pins.patched.lua"),
+            ),
+        ],
+        "SkyborneLeyLineConvergenceMarker.toc": [
+            (
+                "Pins.xml",
+                "\nPins.xml\n",
+                "\n# Forever patch: Pins.xml not loaded, the .lua draws its own pins\n",
+            ),
+        ],
+    },
     "QuestieForeverGamepad": {
         "TrackerBridge.lua": [
             (
@@ -306,27 +340,89 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
+    # Spoken_Quests 3.5.0 (installed 2026-10-17): after it arrived X opened one NPC or mailbox per /reload; the
+    # first close of a window afterwards blocked SetPreferredGamepadInteractTarget() and InteractUnit(), blamed on
+    # Spoken_Quests, and the controller's binding stack, action bar page and navigation state were all rewritten
+    # tainted (AFP controllerTaintScan). Options.lua: its setup called AceConfigDialog:Open at login, which swaps
+    # the global CloseSpecialWindows for the library's closure, run on every Start press; filled when first opened
+    # instead. That alone did not bring X back. Compatibility.lua: a hook on the objective tracker modules' AddBlock,
+    # a Blizzard object's method, which is what breaks this client (see MapUtils); the tracker redraws a frame
+    # after quest item counts change, and the taint showed up with no event about 2 s into a mailbox visit. Its
+    # blocks are read four times a second instead. Confirmed 2026-10-17 13:49: four mailbox visits after the patched reload, no
+    # blocked call (AFP controllerBlocked).
+    "Spoken_Quests": {
+        "Options.lua": [
+            (
+                "the options window filled at login",
+                "        AceConfigDialog:Open(\"SpokenQuests\", self.frame)\n"
+                "        self.frame:SetLayout(\"Fill\")\n",
+                "        -- Forever patch: not opened here; Open replaces CloseSpecialWindows and taints the controller.\n"
+                "        self.frame:SetLayout(\"Fill\")\n",
+            ),
+        ],
+        "Compatibility.lua": [
+            (
+                "the tracker modules' AddBlock",
+                "            if type(module) == \"table\" and module.AddBlock and not hooked[name] then\n"
+                "                hooked[name] = true\n"
+                "                hooksecurefunc(module, \"AddBlock\", function(_, block) Dress(block) end)\n"
+                "            end\n",
+                "            -- Forever patch: no hook on the module's AddBlock; WatchBlocks below reads its blocks.\n",
+            ),
+            (
+                "tracker block watcher",
+                "    Install()\n"
+                "    -- The tracker may load after this file, and the voice packs after the tracker.\n",
+                "    Install()\n"
+                "    -- Forever patch: reads the tracker's blocks four times a second, in place of a hook on its\n"
+                "    -- modules' AddBlock, and dresses a block when it shows another quest.\n"
+                "    local dressed, waited = {}, 0\n"
+                "    local function WatchBlocks(_, elapsed)\n"
+                "        waited = waited + elapsed\n"
+                "        if waited < 0.25 then return end\n"
+                "        waited = 0\n"
+                "        for _, name in ipairs(MODULES) do\n"
+                "            local module = _G[name]\n"
+                "            for _, byTemplate in pairs(type(module) == \"table\" and module.usedBlocks or {}) do\n"
+                "                if type(byTemplate) == \"table\" then\n"
+                "                    for _, block in pairs(byTemplate) do\n"
+                "                        if type(block) == \"table\" and block.id and dressed[block] ~= block.id then\n"
+                "                            dressed[block] = block.id\n"
+                "                            Dress(block)\n"
+                "                        end\n"
+                "                    end\n"
+                "                end\n"
+                "            end\n"
+                "        end\n"
+                "    end\n"
+                "    CreateFrame(\"Frame\"):SetScript(\"OnUpdate\", WatchBlocks)\n"
+                "    -- The tracker may load after this file, and the voice packs after the tracker.\n",
+            ),
+        ],
+    },
+    # Spoken_Places is Spoken_Zones renamed (Spoken 3.5.0, 2026-10-17): the same hook on the map's SetAlpha.
+    # With that hook back (2026-10-09 evening) the game's movement fader failed on the map every frame
+    # ("attempt to call a nil value", PlayerMovementFrameFader.lua:9, 2026-10-12 10:50). Unlike the retired patch,
+    # nothing takes the hook's place: no reader on the map. The panel beside the map no longer fades with it while
+    # walking; it still takes the map's alpha each time it is shown or refreshed.
+    "Spoken_Places": {
+        "UI/MapPanel.lua": [
+            (
+                "the map's SetAlpha",
+                "\tif hooksecurefunc then hooksecurefunc(WorldMapFrame, \"SetAlpha\", FollowAlpha) end\n",
+                "\t-- Forever patch: no hook on the map's SetAlpha; FollowMap reads the alpha at each refresh.\n",
+            ),
+        ],
+    },
 }
 
 # Patches taken out again, as they stood in PATCHES. A run puts the addon's own text back wherever the patch is
 # still in a file. Spoken_Zones: with these in (2026-10-09 18:07) the next two sessions both hung on closing the
 # world map with the controller, the taint log blaming Spoken_Zones (18:59 and 19:02); no log before blamed it.
+# Its MapPanel.lua SetAlpha reader, retired the same evening, has been taken out of the installed copy; that file
+# now has a plain removal of the hook in PATCHES (under Spoken_Places since Spoken 3.5.0).
 RETIRED: dict[str, dict[str, list[tuple[str, str, str]]]] = {
     "Spoken_Zones": {
-        "UI/MapPanel.lua": [
-            (
-                "the map's SetAlpha",
-                "\tif hooksecurefunc then hooksecurefunc(WorldMapFrame, \"SetAlpha\", FollowAlpha) end\n",
-                "\t-- Forever patch: reads the map's alpha on every frame it is shown, in place of a hook on its SetAlpha.\n"
-                "\tlocal seenAlpha\n"
-                "\tCreateFrame(\"Frame\", nil, WorldMapFrame):SetScript(\"OnUpdate\", function()\n"
-                "\t\tlocal alpha = WorldMapFrame:GetAlpha()\n"
-                "\t\tif alpha == seenAlpha then return end\n"
-                "\t\tseenAlpha = alpha\n"
-                "\t\tFollowAlpha()\n"
-                "\tend)\n",
-            ),
-        ],
         "Core.lua": [
             (
                 "the map's OnMapChanged",

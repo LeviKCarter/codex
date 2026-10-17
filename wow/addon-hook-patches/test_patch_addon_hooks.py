@@ -98,8 +98,10 @@ class Mechanics(unittest.TestCase):
         self.assertEqual((code, lines), (0, ["Sample 1.2.3 a.lua: would take out 2 (show; second)"]))
         self.assertEqual(self.file.read_bytes(), patched)
 
-    def test_no_addon_is_both_patched_and_retired(self):
-        self.assertFalse(set(job.PATCHES) & set(job.RETIRED))
+    def test_no_file_is_both_patched_and_retired(self):
+        def files(table):
+            return {(addon, name) for addon, names in table.items() for name in names}
+        self.assertFalse(files(job.PATCHES) & files(job.RETIRED))
 
     def test_every_patch_carries_the_mark_and_differs_from_what_it_replaces(self):
         for addon, files in {**job.PATCHES, **job.RETIRED}.items():
@@ -155,6 +157,16 @@ class Watchers(unittest.TestCase):
 
 # A hook on a frame's own method: hooksecurefunc(<not a string>, ...), also through pcall.
 METHOD_HOOK = re.compile(r"hooksecurefunc\s*[(,]\s*(?!\")[\w.\[\]\"]+\s*,\s*[\w\"]")
+# Method hooks that never run on Forever: Spoken_Quests' shim and hooks inside its 1.12 / 2.4 blocks
+# (`if Version.IsLegacyVanilla`, `if Version.IsLegacyVanilla or Version.IsLegacyBurningCrusade`), and the
+# hook on its own Addon object.
+LEGACY_ONLY = {
+    "Spoken_Quests/Compatibility.lua": (
+        "function hooksecurefunc(table, name, hook)",
+        "hooksecurefunc(GameTooltip, \"SetOwner\", function(self, owner, anchor)",
+        "hooksecurefunc(Addon, \"OnInitialize\", function()",
+    ),
+}
 
 
 @unittest.skipUnless((INSTALLED / "MapUtils").is_dir(), f"MapUtils is not installed in {INSTALLED}")
@@ -193,7 +205,8 @@ class Installed(unittest.TestCase):
                 if (self.addons / addon / name).is_file():
                     self.assertTrue(METHOD_HOOK.search(self.before[name]) if addon == "MapUtils" else True)
                     left = [line.strip() for line in self.text(addon, name).splitlines()
-                            if METHOD_HOOK.search(line.split("--")[0])]
+                            if METHOD_HOOK.search(line.split("--")[0])
+                            and line.strip() not in LEGACY_ONLY.get(f"{addon}/{name}", ())]
                     self.assertEqual(left, [], f"{addon}/{name}")
 
     def test_patched_files_are_still_lua(self):
@@ -201,7 +214,7 @@ class Installed(unittest.TestCase):
         load = LuaRuntime().eval("function(src, name) local fn, err = loadstring(src, name) return err end")
         for addon, files in job.PATCHES.items():
             for name in files:
-                if (self.addons / addon / name).is_file():
+                if name.endswith(".lua") and (self.addons / addon / name).is_file():
                     self.assertIsNone(load(self.text(addon, name), f"@{name}"), f"{addon}/{name}")
 
     def harness(self, source, hooked_call_fails):
@@ -279,6 +292,173 @@ class InstalledBags(unittest.TestCase):
 
     def test_a_patch_that_never_places_the_money_row_is_caught(self):
         self.assertNotEqual(self.mutant("\t\t\t\tBackpackTokenFrame:ClearAllPoints()\n\t\t\t\tBackpackTokenFrame:SetWidth(width)\n", ""), "")
+
+
+SKY = "SkyborneLeyLineConvergenceMarker"
+SKY_KEPT = INSTALLED.parent.parent / "hook-patch-backups" / f"{SKY}-0.4.0"
+
+
+@unittest.skipUnless((SKY_KEPT / f"{SKY}.lua").is_file(), f"no kept {SKY} 0.4.0 in {SKY_KEPT.parent}")
+class Skyborne(unittest.TestCase):
+    """The ley line marker 0.4.0 as it came, with the patches in, run on a mocked map (skyborne/test_overlay.py).
+    A file the patcher has not rewritten yet is not kept, so it is read as installed."""
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, str(Path(__file__).parent / "skyborne"))
+        import test_overlay
+        cls.overlay = test_overlay
+        cls.results = {}
+        for name in job.PATCHES[SKY]:
+            source = SKY_KEPT / name if (SKY_KEPT / name).is_file() else INSTALLED / SKY / name
+            original = source.read_bytes().decode("utf-8").replace("\r\n", "\n")
+            if name.endswith(".toc"):
+                assert re.search(r"^## Version: 0\.4\.0$", original, re.M), f"{source} is not 0.4.0"
+            cls.results[name] = (original, *job.plan(original, job.PATCHES[SKY][name]))
+
+    def test_every_patch_fits_0_4_0(self):
+        for name, (_, _, done, misfits) in self.results.items():
+            self.assertEqual(misfits, [], name)
+            self.assertEqual(len(done), len(job.PATCHES[SKY][name]), name)
+
+    def test_the_patched_addon_draws_its_pins_without_touching_the_map(self):
+        self.overlay.run(src=self.results[f"{SKY}.lua"][1])
+
+    def test_the_original_uses_the_map(self):
+        with self.assertRaisesRegex(self.overlay.lupa.LuaError, "map method used: AddDataProvider"):
+            self.overlay.run(src=self.results[f"{SKY}.lua"][0])
+
+    def test_the_toc_no_longer_loads_the_pin_template(self):
+        toc = self.results[f"{SKY}.toc"][1]
+        self.assertNotIn("\nPins.xml", toc)
+        self.assertIn("\nComm.lua\nScan.lua\n# Forever patch: Pins.xml not loaded", toc)
+
+
+SPQ_OPTIONS = "Options.lua"
+
+
+def ace_opens(source):
+    """The functions of Spoken_Quests' Options.lua that call AceConfigDialog:Open (top level = the file itself)."""
+    found, current = [], "top level"
+    for line in source.splitlines():
+        name = re.match(r"\s*function\s+([\w.:]+)\s*\(", line)
+        if name:
+            current = name.group(1)
+        if "AceConfigDialog:Open(" in line.split("--")[0]:
+            found.append(current)
+    return found
+
+
+@unittest.skipUnless((INSTALLED / "Spoken_Quests" / SPQ_OPTIONS).is_file(), f"Spoken_Quests is not installed in {INSTALLED}")
+class InstalledSpokenQuests(unittest.TestCase):
+    """Spoken_Quests' options, as installed (or as kept, once patched) and with the patch in."""
+
+    @classmethod
+    def setUpClass(cls):
+        kept = (INSTALLED.parent.parent / "hook-patch-backups"
+                / f"Spoken_Quests-{job.addon_version(INSTALLED / 'Spoken_Quests')}" / SPQ_OPTIONS)
+        source = kept if kept.is_file() else INSTALLED / "Spoken_Quests" / SPQ_OPTIONS
+        cls.original = source.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        cls.patched, cls.done, cls.misfits = job.plan(cls.original, job.PATCHES["Spoken_Quests"][SPQ_OPTIONS])
+
+    def test_the_patch_fits(self):
+        self.assertEqual((len(self.done), self.misfits), (1, []))
+
+    def test_the_window_is_filled_only_when_the_player_opens_it(self):
+        self.assertEqual(ace_opens(self.patched), ["Options:OpenConfigWindow"])
+
+    def test_the_original_fills_it_at_login(self):
+        self.assertEqual(ace_opens(self.original), ["Options:Initialize", "Options:OpenConfigWindow"])
+
+    def test_the_patched_file_is_still_lua(self):
+        from lupa.lua51 import LuaRuntime
+        load = LuaRuntime().eval("function(src, name) local fn, err = loadstring(src, name) return err end")
+        self.assertIsNone(load(self.patched, "@Options.lua"))
+
+
+SPQ_COMPAT = "Compatibility.lua"
+# Spoken_Quests' tracker block (`do local MODULES ... end`) run on a mocked tracker. `dressed` counts the
+# blocks bound to a quest, `hooks` the hooks put on a module, `Tick(s)` runs the frames' OnUpdate.
+TRACKER_ENV = r"""
+dressed, hooks, updates = 0, 0, {}
+local function Button()
+  local b = {}
+  for _, m in ipairs({"SetSize", "SetHitRectInsets", "SetBox", "SetFrameLevel", "SetPoint", "Show", "Hide"}) do
+    b[m] = function() end
+  end
+  b.CreateTexture = function() return {SetPoint = function() end, SetColorTexture = function() end} end
+  return b
+end
+function CreateFrame()
+  local f = {RegisterEvent = function() end}
+  function f:SetScript(script, fn) if script == "OnUpdate" then table.insert(updates, fn) end end
+  return f
+end
+function hooksecurefunc() hooks = hooks + 1 end
+function Tick(seconds) for _, fn in ipairs(updates) do fn(nil, seconds) end end
+Spoken = {DressBoxButton = function() end}
+Addon = {IsPartOn = function() return true end}
+DataModules = {PrepareSound = function() return true end}
+Utils = {CreateDetachedFrame = function() return Button() end}
+Debug = {Record = function() end}
+Enums = {SoundEvent = {QuestAccept = 1}}
+C_QuestLog = {GetTitleForQuestID = function() return "Quest" end}
+QuestOverlayUI = {BindPlayButton = function() dressed = dressed + 1 end, SetPlayButtonState = function() end}
+local function Block(id) return {id = id, GetFrameLevel = function() return 1 end} end
+first, second = Block(101), Block(102)
+QuestObjectiveTracker = {AddBlock = function() end, usedBlocks = {QuestTemplate = {a = first, b = second}}}
+"""
+
+
+@unittest.skipUnless((INSTALLED / "Spoken_Quests" / SPQ_COMPAT).is_file(), f"Spoken_Quests is not installed in {INSTALLED}")
+class InstalledSpokenQuestsTracker(unittest.TestCase):
+    """Spoken_Quests' objective tracker Play buttons, as installed (or as kept) and with the patch in."""
+
+    @classmethod
+    def setUpClass(cls):
+        kept = (INSTALLED.parent.parent / "hook-patch-backups"
+                / f"Spoken_Quests-{job.addon_version(INSTALLED / 'Spoken_Quests')}" / SPQ_COMPAT)
+        source = kept if kept.is_file() else INSTALLED / "Spoken_Quests" / SPQ_COMPAT
+        cls.original = source.read_bytes().decode("utf-8").replace("\r\n", "\n")
+        cls.patched, cls.done, cls.misfits = job.plan(cls.original, job.PATCHES["Spoken_Quests"][SPQ_COMPAT])
+
+    @staticmethod
+    def block(source):
+        start = source.index("do\n    local MODULES")
+        return source[start:source.index("\nend\n", start) + 5]
+
+    def play(self, source):
+        from lupa.lua51 import LuaRuntime
+        lua = LuaRuntime()
+        lua.execute(TRACKER_ENV)
+        lua.execute(self.block(source))
+        g = lua.globals()
+        counts = [(g.dressed, g.hooks)]
+        lua.execute("Tick(0.1)")
+        counts.append((g.dressed, g.hooks))
+        lua.execute("Tick(0.2)")
+        counts.append((g.dressed, g.hooks))
+        lua.execute("Tick(1)")
+        counts.append((g.dressed, g.hooks))
+        lua.execute("second.id = 103; Tick(1)")
+        counts.append((g.dressed, g.hooks))
+        return counts
+
+    def test_both_patches_fit(self):
+        self.assertEqual((len(self.done), self.misfits), (2, []))
+
+    def test_the_original_hooks_the_tracker(self):
+        self.assertEqual(self.play(self.original)[0], (2, 1))
+
+    def test_blocks_are_dressed_without_a_hook_and_again_when_they_show_another_quest(self):
+        # At load the sweep dresses both; the first watched pass dresses them once more (it has not seen
+        # them yet), then only the block whose quest changed.
+        self.assertEqual(self.play(self.patched), [(2, 0), (2, 0), (4, 0), (4, 0), (5, 0)])
+
+    def test_a_watcher_that_forgets_what_it_dressed_is_caught(self):
+        broken = self.patched.replace("dressed[block] = block.id\n", "")
+        self.assertNotEqual(broken, self.patched)
+        self.assertNotEqual(self.play(broken), [(2, 0), (2, 0), (4, 0), (4, 0), (5, 0)])
 
 
 if __name__ == "__main__":
