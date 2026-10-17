@@ -38,23 +38,40 @@ PulseOps worktrees or the game folder, so the session's own worktree is clean ei
 **Finished** (archive):
 - It says the change shipped and is live, or the answer was given, or "nothing is left".
 - A closing remark such as "tell me if you meant something else" does not hold a session open.
+- It only waits on an in-game check: a `/reload`, a game restart, "not seen in game yet", a real patch day. Levi,
+  2026-10-17: "Consider anything that I don't bring up again as confirmed working in-game." A change he has had
+  the chance to load and has not raised again counts as working. A newer session that changed the same thing
+  again (a button order changed twice) settles an older one too.
 
 **Not finished** (keep):
-- The fix is unproven or "not fixed yet".
-- It is waiting on Levi: a `/reload`, a game restart, a test he has to run, a decision, or a direct question
-  ("Want me to?").
+- It waits on Levi's "ship", a decision, or a direct question ("Want me to?"), or on something only he can do
+  outside the game (a run in his own terminal, a sign-in).
+- He has raised the problem again since the session's last report.
 - A review or background job came back with findings nobody has acted on.
-- It built something that has not run where it is meant to run, and says so.
-- You cannot tell. When in doubt, keep it.
+
+**Unclear** (the session stopped partway, its last report contradicts itself, or you cannot tell): settle it
+yourself. Levi, 2026-10-17: "Resolve anything that's unclear yourself, or give it to me if you can't figure it
+out." Read further back, check the files, the PR, the deploy log or the live system, and finish a read-only check
+the session left half done. Then archive or keep it on that evidence. Only what you truly cannot settle stays, and
+goes to Levi as one concrete question, not a "kept to be safe".
 
 Then check each finished session's worktree (`cwd`) holds nothing unsaved:
 
 ```bash
 git -C "<cwd>" status --porcelain
-git -C "<cwd>" cherry origin/main HEAD
+git -C "<cwd>" cherry <remote>/main HEAD
 ```
 
 Any output from the first, or a `+` line from the second, means unsaved work: keep the session and say what is there.
+- The remote is `origin` for Codex worktrees, but `github` for app worktrees of PulseOps
+  (`PulseOps\.claude\worktrees\…`). A cwd that is no git repo at all (the game folder) has nothing to check.
+- An untracked `.claude/` in an app worktree holding only `settings.local.json` and
+  `skills/impeccable/…/impeccable.exe`, dated when the session started, is the app's own copy, not unsaved work.
+
+Before archiving, mind the cascade: the app also archives a session's finished side sessions, and cleans up a
+worktree side sessions may share. Keep a finished session when a side session under it (or sharing its worktree) is
+one you are keeping. Keep a session that runs this skill on a schedule ("Archive finished sessions every 2 hours"):
+archiving it would stop the schedule.
 
 ## 4. Archive
 
@@ -67,6 +84,7 @@ Two short lists, each session linked as `[title](#<sessionId>)`:
 
 - **Archived:** title and the evidence in a few words.
 - **Kept:** title and why, grouped as running, pinned, waiting on Levi (say for what), and unfinished.
+- **For you:** the few unclear ones you could not settle, each as one concrete question.
 
 ## 6. Remove the PulseOps worktrees that merged work left behind
 
