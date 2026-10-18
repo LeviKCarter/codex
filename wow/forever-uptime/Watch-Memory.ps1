@@ -4,6 +4,9 @@
 # biggest program other than the game, at most once every $WarnEveryMinutes minutes. It stays until there is room
 # again or the game closes, then goes by itself (nothing to dismiss with the controller). Silent while the game is
 # closed. Run by the scheduled task "WoW Forever Memory Watch" (register_memory_watch_task.ps1).
+# Each warning also asks for the archiver: it writes $archiveFile, and the Claude app's scheduled task
+# "archive-on-low-memory" (every 10 minutes) runs /archive-finished when the file is there and deletes it. Only the app
+# can archive sessions (its session tools exist nowhere else), and each finished session still open holds ~0.55 GB.
 # -Once: one check, print what it did. -WarnBelowGB: another limit (to see the real notification). ASCII only.
 param([switch]$Once, [double]$WarnBelowGB = 0)
 $ErrorActionPreference = 'Stop'
@@ -15,10 +18,12 @@ $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershe
 if ($script:TestDir) {
     $warnedFile = Join-Path $script:TestDir 'memory-warned.txt'
     $saidFile = Join-Path $script:TestDir 'said-memory-warning.txt'
+    $archiveFile = Join-Path $script:TestDir 'archive-requested.txt'
     $logFile = $null
 } else {
     $warnedFile = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-forever-memory-warned.txt'
     $saidFile = $null
+    $archiveFile = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-forever-archive-requested.txt'
     $logFile = Join-Path $env:LOCALAPPDATA 'PulseAgent\logs\wow-forever-memory.log'
 }
 $script:ToastUp = $false
@@ -82,11 +87,13 @@ function Invoke-MemoryCheck {
         if (([DateTime]::UtcNow - $last).TotalMinutes -lt $script:WarnEveryMinutes) { return 'warned already' }
     }
     $culprit = Get-Culprit $mem
-    $restart = if ($culprit) { "Restart $culprit now, before the game runs out and crashes." } else { 'Close something big now, before the game runs out and crashes.' }
-    $text = "Only {0:N1} GB of memory left. {1} Biggest: {2}." -f $mem.FreeGB, $restart, (Format-MemoryTop $mem)
+    $restart = if ($culprit) { "If that is not enough, restart $culprit before the game runs out and crashes." } else { 'If that is not enough, close something big before the game runs out and crashes.' }
+    $text = "Only {0:N1} GB of memory left. Archiving finished Claude sessions now. {1} Biggest: {2}." -f $mem.FreeGB, $restart, (Format-MemoryTop $mem)
     Show-Warning 'WoW Forever: memory almost gone' $text
     New-Item -ItemType Directory -Path (Split-Path $warnedFile) -Force | Out-Null
     Set-Content -LiteralPath $warnedFile -Value ([DateTime]::UtcNow.ToString('o'))
+    New-Item -ItemType Directory -Path (Split-Path $archiveFile) -Force | Out-Null
+    Set-Content -LiteralPath $archiveFile -Value ('{0} {1:N1} GB free' -f [DateTime]::UtcNow.ToString('o'), $mem.FreeGB)
     return "warned: $text"
 }
 
