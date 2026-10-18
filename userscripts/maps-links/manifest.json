@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Maps Links",
+  "version": "1.0.0",
+  "description": "Street addresses on any page become links that open in Google Maps.",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "exclude_matches": ["*://www.google.com/maps*", "*://maps.google.com/*"],
+      "js": ["Maps-Links.user.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

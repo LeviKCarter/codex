@@ -25,6 +25,8 @@
 !userscripts/Reddit-Quick-Mute-Mobile.user.js
 !userscripts/Uber-Trip-History.user.js
 !userscripts/Uber-Trip-History.test.mjs
+!userscripts/maps-links/
+!userscripts/maps-links/**
 # The job that answers the WoW addon's item lookups (the addon itself lives in the game folder, not in git).
 !wow/
 !wow/afp-lookup/

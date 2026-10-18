@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- Fixture for Maps-Links.user.js: serve this folder on 127.0.0.1 and open fixture.html. The script runs as a page
+     script here; the checks at the bottom compare what it linked with what each case expects and write PASS or FAIL
+     at the top (also window.fixtureResult). See AGENTS.md. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maps Links fixture</title>
+<style>
+  body { background: #1b1d1f; color: #d6d6d6; font: 15px/1.5 Lato, system-ui, sans-serif; margin: 0; padding: 16px; }
+  .card { max-width: 340px; margin: 0 auto 20px; border: 1px solid #3a3c3e; border-radius: 4px; padding: 18px 24px; }
+  .label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #aaa; margin: 14px 0 6px; }
+  .loc { display: flex; gap: 14px; }
+  .map { width: 48px; height: 48px; background: #eee; border-radius: 4px; flex: none; }
+  #result { max-width: 340px; margin: 0 auto 20px; font-weight: bold; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="result">checking…</div>
+<!-- A clock that changes every 50 ms: content added meanwhile must still be scanned. -->
+<div id="tick"></div>
+
+<!-- 1. The Illegal Pete's order page: name, street and city each in their own element. -->
+<div class="card" data-case="order-page" data-expect="2001 E. Colfax Ave, Denver, CO 80206" data-links="2">
+  <div class="label">Order type</div>
+  <div>Pickup</div><div>ASAP</div>
+  <div class="label">Store location</div>
+  <div class="loc">
+    <div class="map"></div>
+    <div>
+      <strong>Illegal Pete's Colfax</strong>
+      <div>2001 E. Colfax Ave</div>
+      <div>Denver, CO 80206</div>
+    </div>
+  </div>
+  <div class="label">Store contact information</div>
+  <div>(720) 723-2703</div>
+  <div class="label">Order number: 47355569603395590</div>
+  <div>1 Burritos $12.28</div>
+  <div>Today at 1:47pm MDT</div>
+</div>
+
+<!-- 2. Street and city split by a <br> in one element: the element itself becomes the link. -->
+<div class="card" data-case="br-lines" data-expect="1437 Bannock St, Denver, CO 80202" data-links="1">
+  <p>1437 Bannock St<br>Denver, CO 80202</p>
+</div>
+
+<!-- 3. An address inside a sentence: a link is put in the text. -->
+<div class="card" data-case="sentence" data-expect="350 Fifth Avenue, New York, NY 10118" data-links="1">
+  <p id="sentence">Meet at 350 Fifth Avenue, New York, NY 10118 at noon.</p>
+</div>
+
+<!-- 4. Places the script must leave alone. -->
+<div class="card" data-case="left-alone" data-links="0">
+  <a href="#here">1600 Pennsylvania Ave NW, Washington, DC 20500</a>
+  <textarea>1 Infinite Loop, Cupertino, CA 95014</textarea>
+  <div contenteditable="true">700 16th Street, Denver, CO 80202</div>
+  <code>85 S Broadway</code>
+  <p>5 Ways To Find Your Way · 10 Tips For Your Drive</p>
+</div>
+
+<!-- 5. A clickable card: a click on the address opens Maps and does not also click the card. -->
+<div class="card" data-case="clickable-card" data-expect="85 S Broadway, Denver, CO 80209" data-links="1" id="card">
+  <span>Next stop: 85 S Broadway, Denver, CO 80209 (closes at 9)</span>
+</div>
+
+<!-- 6. Added after load, as a single-page app does. -->
+<div class="card" data-case="added-later" data-expect="1600 Amphitheatre Pkwy, Mountain View, CA 94043" data-links="1" id="later"></div>
+
+<script>
+  window.opened = [];
+  window.open = (url) => { window.opened.push(url); return null; };
+  window.cardClicks = 0;
+  setInterval(() => { document.getElementById("tick").textContent = `tick ${Date.now() % 1000}`; }, 50);
+  document.getElementById("card").addEventListener("click", () => window.cardClicks++);
+</script>
+<script src="Maps-Links.user.js"></script>
+<script>
+  // A React-style render after load: a new element whose text node the app keeps a handle on.
+  const appText = document.createTextNode("1600 Amphitheatre Pkwy, Mountain View, CA 94043");
+  const appEl = document.createElement("div");
+  setTimeout(() => {
+    appEl.append(appText);
+    document.getElementById("later").append(appEl);
+  }, 200);
+
+  const url = (q) => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(q);
+  setTimeout(() => {
+    const problems = [];
+    for (const box of document.querySelectorAll("[data-case]")) {
+      const links = [...box.querySelectorAll("[data-maps-link]")];
+      const want = Number(box.dataset.links);
+      if (links.length !== want) problems.push(`${box.dataset.case}: ${links.length} links, want ${want}`);
+      for (const l of links) {
+        if (l.dataset.mapsLink !== url(box.dataset.expect)) problems.push(`${box.dataset.case}: ${l.dataset.mapsLink}`);
+      }
+    }
+    // The order page's own words stay as they were.
+    if (!document.querySelector('[data-case="order-page"]').textContent.includes("Order number: 47355569603395590")) problems.push("order-page: text changed");
+    if (document.getElementById("sentence").textContent !== "Meet at 350 Fifth Avenue, New York, NY 10118 at noon.") problems.push("sentence: text changed");
+
+    // A click on each link opens Maps; the card under one does not get the click.
+    for (const l of document.querySelectorAll("[data-maps-link]")) {
+      if (l.tagName === "A") l.addEventListener("click", (e) => { window.opened.push(l.href); e.preventDefault(); }, { once: true });
+      l.click();
+    }
+    const links = document.querySelectorAll("[data-maps-link]").length;
+    if (window.opened.length !== links) problems.push(`clicks opened ${window.opened.length} of ${links}`);
+    if (window.cardClicks !== 0) problems.push(`the card got ${window.cardClicks} clicks`);
+
+    // The app can still take its text node out: it is still where the app put it.
+    try { appEl.removeChild(appText); } catch (e) { problems.push(`app removeChild: ${e.message}`); }
+
+    window.fixtureResult = problems.length ? "FAIL\n" + problems.join("\n") : `PASS (${links} links)`;
+    document.getElementById("result").textContent = window.fixtureResult;
+  }, 1200);
+</script>
+</body>
+</html>
