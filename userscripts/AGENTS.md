@@ -115,3 +115,25 @@ Ops keeps the trips in `uber-trips.json` (`app/uberTrips.ts`, `api/uber-trips` i
   closes itself (`@grant window.close`) 10 s after a run that ended by itself, or as soon as it finds no run due
   (Levi, 2026-10-13: "close the uber tab when it's done pulling"). A run Uber, the PC, a Stop or a pause ended leaves
   it open with its line. A tab he opened himself never closes.
+
+# Maps Links
+
+`maps-links/` turns street addresses on any web page into links that open a Google Maps search for them (asked for
+2026-10-18 on an Illegal Pete's order page, where "2001 E. Colfax Ave" and "Denver, CO 80206" sit on two lines). It is
+an unpacked Chrome extension (`manifest.json`, loaded from this folder in the main checkout) whose one content script,
+`Maps-Links.user.js`, also carries a userscript header, so the same file installs in Tampermonkey from its raw URL.
+
+- US addresses only: a house number, one to four capitalized words, a street type (`STREET_TYPES`) or Broadway, an
+  optional unit, then an optional "City, ST ZIP". A city line in the next text node (after a `<br>` or in the next
+  element, within three parents) joins the street's link. Headline words (`NOT_A_STREET`) keep "5 Ways To Find Your
+  Way" from matching.
+- It leaves the page's own nodes where they are, so React pages can still update and remove them: an element whose
+  only text is the address gets a click handler and a dotted underline in place; an address inside longer text is
+  split with the page's text node left in front. Links, buttons, inputs, `code`/`pre` and editable areas are skipped.
+  New content is scanned 300 ms after it appears (a MutationObserver, timers rather than requestAnimationFrame).
+- Bump `@version` and the manifest's `version` together, by hand.
+- Before committing: `node --check userscripts/maps-links/Maps-Links.user.js`,
+  `node userscripts/maps-links/Maps-Links.test.mjs` (the matchers, no DOM), and `fixture.html` in a browser: serve
+  the folder on 127.0.0.1 (`python -m http.server 8765 --bind 127.0.0.1 --directory userscripts/maps-links`) and read
+  `window.fixtureResult`, which must say `PASS`. It runs the script as a page script and checks each case's links,
+  the clicks, a clickable card that must not get the click, content added after load, and a React-style removal.
