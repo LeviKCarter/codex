@@ -209,7 +209,7 @@ try {
     # The memory watch: memory that runs out while the game is open crashes it too, so it warns in time.
     $watch = Join-Path $PSScriptRoot 'Watch-Memory.ps1'
     function Get-Said { if (Test-Path "$dir\said-memory-warning.txt") { @(Get-Content "$dir\said-memory-warning.txt") } else { @() } }
-    function Reset-Watch { Remove-Item "$dir\said-memory-warning.txt", "$dir\memory-warned.txt", "$dir\game-running.txt" -ErrorAction SilentlyContinue }
+    function Reset-Watch { Remove-Item "$dir\said-memory-warning.txt", "$dir\memory-warned.txt", "$dir\game-running.txt", "$dir\archive-requested.txt" -ErrorAction SilentlyContinue }
     Reset-Watch
     Set-Content -LiteralPath "$dir\memory" -Value @('2.4', 'claude 19.5', 'chrome 4.7', 'SignalRgb 4.6')
     $out = & $watch -Once
@@ -219,24 +219,28 @@ try {
     Check 'watch: game open with room, nothing is said' ((& $watch -Once) -eq 'ok' -and (Get-Said).Count -eq 0)
     Set-Content -LiteralPath "$dir\memory" -Value @('5.1', 'claude 19.5', 'WowB 6.6')
     Check 'watch: just above the limit, nothing is said' ((& $watch -Once) -eq 'ok' -and (Get-Said).Count -eq 0)
+    Check 'watch: room enough, the archiver is not asked for' (!(Test-Path "$dir\archive-requested.txt"))
     Set-Content -LiteralPath "$dir\memory" -Value @('4.9', 'claude 19.5', 'WowB 6.6', 'chrome 4.7')
     $out = & $watch -Once
     $said = @(Get-Said)
     Check 'watch: just below the limit, it warns once' ($out -like 'warned:*' -and $said.Count -eq 1)
-    Check 'watch: the warning says how much is left and to restart the Claude app' ($said[0] -like 'WoW Forever: memory almost gone / Only 4.9 GB of memory left. Restart the Claude app (19.5 GB) now, before the game runs out and crashes. Biggest: claude 19.5 GB, WowB 6.6 GB, chrome 4.7 GB.')
+    Check 'watch: the warning says how much is left, that it archives, and to restart the Claude app' ($said[0] -like 'WoW Forever: memory almost gone / Only 4.9 GB of memory left. Archiving finished Claude sessions now. If that is not enough, restart the Claude app (19.5 GB) before the game runs out and crashes. Biggest: claude 19.5 GB, WowB 6.6 GB, chrome 4.7 GB.')
+    Check 'watch: the warning asks the Claude app to run the archiver' ((Test-Path "$dir\archive-requested.txt") -and (Get-Content "$dir\archive-requested.txt" -Raw) -like '*4.9 GB free*')
+    Remove-Item "$dir\archive-requested.txt" -ErrorAction SilentlyContinue
     Set-Content -LiteralPath "$dir\memory" -Value @('3.0', 'claude 20.1', 'WowB 6.6')
     Check 'watch: within 15 minutes it does not warn again' ((& $watch -Once) -eq 'warned already' -and (Get-Said).Count -eq 1)
+    Check 'watch: within 15 minutes the archiver is not asked again' (!(Test-Path "$dir\archive-requested.txt"))
     Set-Content -LiteralPath "$dir\memory-warned.txt" -Value ([DateTime]::UtcNow.AddMinutes(-14).ToString('o'))
     Check 'watch: 14 minutes on, still quiet' ((& $watch -Once) -eq 'warned already' -and (Get-Said).Count -eq 1)
     Set-Content -LiteralPath "$dir\memory-warned.txt" -Value ([DateTime]::UtcNow.AddMinutes(-16).ToString('o'))
-    Check 'watch: 16 minutes on and still low, it warns again' ((& $watch -Once) -like 'warned:*' -and @(Get-Said)[-1] -like '*Only 3.0 GB*Restart the Claude app (20.1 GB)*' -and (Get-Said).Count -eq 2)
+    Check 'watch: 16 minutes on and still low, it warns again' ((& $watch -Once) -like 'warned:*' -and @(Get-Said)[-1] -like '*Only 3.0 GB*restart the Claude app (20.1 GB)*' -and (Get-Said).Count -eq 2 -and (Test-Path "$dir\archive-requested.txt"))
     Set-Content -LiteralPath "$dir\memory" -Value @('5.5', 'claude 19.5')
     Check 'watch: barely back over the limit, the warning stays' ((& $watch -Once) -eq 'ok' -and (Get-Said).Count -eq 2)
     Set-Content -LiteralPath "$dir\memory" -Value @('21', 'WowB 6.6', 'claude 1.8')
     Check 'watch: room again (Claude restarted), the warning goes by itself' ((& $watch -Once) -eq 'ok' -and (Get-Said).Count -eq 0)
     Reset-Watch; Set-Content -LiteralPath "$dir\game-running.txt" -Value 'yes'
     Set-Content -LiteralPath "$dir\memory" -Value @('4.0', 'WowB 9.1', 'chrome 4.7', 'SignalRgb 4.6')
-    Check 'watch: the game itself biggest, it names the next one' ((& $watch -Once) -like 'warned:*' -and @(Get-Said)[0] -like '*Restart chrome (4.7 GB) now*')
+    Check 'watch: the game itself biggest, it names the next one' ((& $watch -Once) -like 'warned:*' -and @(Get-Said)[0] -like '*restart chrome (4.7 GB) before*')
     Remove-Item "$dir\game-running.txt"
     Check 'watch: the game closed, the warning goes' ((& $watch -Once) -eq 'no game' -and (Get-Said).Count -eq 0)
     Reset-Watch; Set-Content -LiteralPath "$dir\game-running.txt" -Value 'yes'
