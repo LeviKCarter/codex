@@ -120,8 +120,13 @@ Ops keeps the trips in `uber-trips.json` (`app/uberTrips.ts`, `api/uber-trips` i
 
 `maps-links/` turns street addresses on any web page into links that open a Google Maps search for them (asked for
 2026-10-18 on an Illegal Pete's order page, where "2001 E. Colfax Ave" and "Denver, CO 80206" sit on two lines). It is
-an unpacked Chrome extension (`manifest.json`, loaded from this folder in the main checkout) whose one content script,
-`Maps-Links.user.js`, also carries a userscript header, so the same file installs in Tampermonkey from its raw URL.
+an unpacked Chrome extension whose one content script, `Maps-Links.user.js`, also carries a userscript header, so the
+same file installs in Tampermonkey from its raw URL.
+
+- Chrome loads it unpacked from `C:\Users\levik\Documents\Maps Links`, not from the repo: the main checkout often
+  holds other sessions' uncommitted work and cannot always be pulled. After a merge, copy `manifest.json` and
+  `Maps-Links.user.js` from `origin/main` there (`git show origin/main:userscripts/maps-links/<file>`), then Levi
+  reloads it at chrome://extensions.
 
 - US addresses only: a house number, one to four capitalized words, a street type (`STREET_TYPES`) or Broadway, an
   optional unit, then an optional "City, ST ZIP". A city line in the next text node (after a `<br>` or in the next
