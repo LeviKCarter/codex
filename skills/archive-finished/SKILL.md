@@ -81,6 +81,18 @@ worktree side sessions may share. Keep a finished session when a side session un
 one you are keeping. Keep a session that runs this skill on a schedule ("Archive finished sessions every 2 hours"):
 archiving it would stop the schedule.
 
+The cascade follows `startedBy`, not worktrees. Every idle side session without an open PR goes with its parent,
+even one in a worktree of its own, and even one you messaged a moment ago that has not started its turn yet. So
+right before each `archive_session`:
+
+- Take the sessions whose `startedBy` is that session, from a fresh `list_sessions` (not the one from step 1).
+- If any of them is one you are keeping, or one this run sent a message to (a `/ship` order, a question), keep the
+  parent too. Archive it on a later run, once that side session's own report shows its work done.
+- Never reason past this ("it has its own worktree", "the delivery says its turn started"). On 2026-10-19 a sweep
+  told "Fix flaky log-race tests" to `/ship`, then archived its parent "Voice-to-text order completion" on that
+  reasoning. The app archived the log-race session along with it, before it had committed anything, and it had to
+  be unarchived and told again.
+
 ## 4. Archive
 
 `archive_session` for each finished session, with a `reason` that names the evidence ("pulseops#956 merged and
