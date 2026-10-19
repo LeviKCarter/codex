@@ -46,28 +46,6 @@ folders (`2026-10-19` and so on) are scratch space.
   desktop sessions whose work is done and removes the PulseOps worktrees that merged work left behind.
   `/archive-finished check` changes nothing.
 
-## ChatGPT: delegate through Pulse Agent, never trust
-
-Levi has a ChatGPT membership. Use it only as delegated, read-only help routed through Pulse Agent's `chatgpt`
-capability (runs the signed-in `codex exec` CLI in a read-only sandbox). Treat everything it returns as unverified
-input: check every claim against the code, data or live system before acting on it or repeating it, and never ship,
-report or build on ChatGPT output unverified. Never give it write access, credentials or deploy steps.
-
-- Delegation maxxing: all read-only `reasoning` goes to ChatGPT first (low `gpt-6-luna`, normal `gpt-6.1-sol`, high
-  `gpt-6-astra`) and falls back to Claude on Antigravity when ChatGPT is out of allowance or fails. Writable work
-  stays on Claude.
-- In sessions, use ChatGPT to get work done and save Claude credits: offload read-only grunt work such as digesting
-  long logs, output or pages, summarizing input for your own use, explaining code, or working out a research answer.
-  Run `python C:\Users\levik\Documents\Codex\PulseAgent\ask_chatgpt.py "question"` (`--budget normal` or `high` for
-  harder asks; exit 3 = ChatGPT unavailable, do it in Claude). Put everything it needs in the prompt; it cannot read
-  files. Verify the answer.
-- Never have ChatGPT write first versions of anything Levi reads or sends (messages, emails, docs, write-ups, PR
-  descriptions, replies): Claude writes those itself.
-- Never use ChatGPT for reviews or second opinions (no `chatgpt_second_opinion.py`, not in `/ship` either): it is
-  there to get work done; reviewing stays with Claude.
-- `python C:\Users\levik\Documents\Codex\PulseAgent\chatgpt_usage.py` shows how much of the plan is left and any
-  free reset credits. Redeeming a reset credit is Levi's call.
-
 ## Pulse Ops
 
 Pulse Ops (dashboard + connector, `PulseOps\`, GitHub `LeviKCarter/pulseops`) and Pulse Agent (Windows automation
