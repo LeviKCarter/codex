@@ -44,8 +44,16 @@ PulseOps worktrees or the game folder, so the session's own worktree is clean ei
   again (a button order changed twice) settles an older one too.
 
 **Not finished** (keep):
-- It waits on Levi's "ship", a decision, or a direct question ("Want me to?"), or on something only he can do
+- It waits on a decision or a direct question ("Want me to?") that is truly Levi's, or on something only he can do
   outside the game (a run in his own terminal, a sign-in).
+- It stopped at proven but uncommitted work "until Levi says ship". His standing rule is to auto-ship every
+  finished change, so don't pass that wait on to him: `SendMessage` the session to run `/ship` now, keep it, and
+  report that you told it to.
+
+A question is Levi's only if the evidence can't settle it, or if it rests on a rule that is written down (memory or a
+`CLAUDE.md`). When a session measured something and made the call itself, it is finished, even when it then asks
+"should I do the other thing anyway?". Levi, 2026-10-19, about a judge model the session had measured and kept: "It
+decided that itself, didn't it? Why is it asking me that?"
 - He has raised the problem again since the session's last report.
 - A review or background job came back with findings nobody has acted on.
 
