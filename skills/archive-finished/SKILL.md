@@ -46,9 +46,10 @@ PulseOps worktrees or the game folder, so the session's own worktree is clean ei
 **Not finished** (keep):
 - It waits on a decision or a direct question ("Want me to?") that is truly Levi's, or on something only he can do
   outside the game (a run in his own terminal, a sign-in).
-- It stopped at proven but uncommitted work "until Levi says ship". His standing rule is to auto-ship every
-  finished change, so don't pass that wait on to him: `SendMessage` the session to run `/ship` now, keep it, and
-  report that you told it to.
+- It stopped at proven but uncommitted work "until Levi says ship". That wait comes from a wrong line in its brief
+  (his standing rule is to auto-ship), so say that, not "waiting on your ship". Don't message it to ship: a session
+  rightly refuses another session's order as his go-ahead (2026-10-19). Keep it, and under **For you** name the
+  session and the one line he can type there: "ship it".
 
 A question is Levi's only if the evidence can't settle it, or if it rests on a rule that is written down (memory or a
 `CLAUDE.md`). When a session measured something and made the call itself, it is finished, even when it then asks
