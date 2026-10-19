@@ -8,6 +8,11 @@ the addon reloads once more by itself 4 seconds after the first one has loaded (
 is on disk), and the item's tooltip then shows "Lookup: ...". An answer that takes longer is picked up by the
 addon's second, last reload 10 seconds later.
 
+Bag items the addon cannot explain (no price, no vendor value, no quest data; its tooltip said "Purpose unknown") are
+saved under `unexplainedItems`. They are looked up the same way without being asked, after the clicked requests and
+one per pass, so a click never waits behind them. The addon does not reload for them: the note shows from the next
+reload or login, and the addon then drops the item from its list.
+
 * Wowhead is the only source. Its comments are other players' words: the prompt gives them as data, Claude runs
   with no tools, and the answer is cut to one line of plain text before it is written.
 * The line is written by Claude on the signed-in CLI, as Pulse Agent's rundown is (model_jobs.claude_command).
@@ -46,6 +51,7 @@ from typing import Callable
 WOW_INSTALL = Path(r"D:\Games\World of Warcraft")  # its game folders (_classic_beta_, ...) are found, not named
 SCRIPT = Path(__file__).resolve()
 ADDON = "AuctionatorForeverPrices"
+UNEXPLAINED = "unexplainedItems"  # bag items the addon could not explain; looked up without being asked
 PULSE_AGENT = Path(r"C:\Users\levik\Documents\Codex\PulseAgent")
 STATE_FILE = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "PulseAgent" / "afp-lookup-state.json"
 WOWHEAD_TOOLTIP = "https://nether.wowhead.com/forever/tooltip/item/{id}"
@@ -54,6 +60,7 @@ USER_AGENT = "Mozilla/5.0"  # as measured 2026-10-09: this is answered, a full C
 POLL_SECONDS = 1  # the addon waits a fixed time for the answer, so a second saved here is a second of margin
 RETRY_SECONDS = 60
 MAX_TRIES = 3
+SIGNED_OUT = "Claude on the PC is signed out (run claude, then /login)"
 NOTE_CHARS = 220  # a tooltip line; the addon wraps it
 COMMENTS, COMMENT_CHARS = 8, 400
 CLAUDE_SECONDS = 120
@@ -159,9 +166,9 @@ def _table_end(text: str, opening: int) -> int:
     return len(text)
 
 
-def read_requests(saved: str) -> dict[int, str]:
-    """{item id: item name} for every lookup the saved variables hold."""
-    head = re.search(r'\["lookupRequests"\]\s*=\s*\{', saved)
+def read_requests(saved: str, key: str = "lookupRequests") -> dict[int, str]:
+    """{item id: item name} for every lookup the saved variables hold (or for every item under another `key`)."""
+    head = re.search(r'\["' + re.escape(key) + r'"\]\s*=\s*\{', saved)
     if not head:
         return {}
     block = saved[head.end():_table_end(saved, head.end() - 1)]
@@ -187,13 +194,28 @@ def read_notes(notes_file: Path) -> dict[int, tuple[str, str]]:
     return notes
 
 
-def write_notes(notes_file: Path, notes: dict[int, tuple[str, str]]) -> None:
+def read_status(notes_file: Path) -> str:
+    """Why lookups are on hold, as ItemNotes.lua last said it ("" when they are not)."""
+    try:
+        text = notes_file.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+    m = re.search(r"^AFP_LookupStatus\s*=\s*" + LUA_STRING, text, re.M)
+    return _unlua(m.group(1)) if m else ""
+
+
+def lua_quote(text: str) -> str:
+    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def write_notes(notes_file: Path, notes: dict[int, tuple[str, str]], status: str = "") -> None:
     lines = [NOTES_HEAD, "AFP_ItemNotes = {\r\n"]
     for item_id in sorted(notes):
         note, name = notes[item_id]
-        quoted = note.replace("\\", "\\\\").replace('"', '\\"')
-        lines.append(f'  [{item_id}] = "{quoted}",' + (f" -- {plain(name, 80)}" if name else "") + "\r\n")
+        lines.append(f"  [{item_id}] = {lua_quote(note)}," + (f" -- {plain(name, 80)}" if name else "") + "\r\n")
     lines.append("}\r\n")
+    if status:  # the addon's tooltip says this in place of promising an answer
+        lines.append(f"AFP_LookupStatus = {lua_quote(plain(status, NOTE_CHARS))}\r\n")
     scratch = notes_file.with_name(notes_file.name + ".tmp")
     scratch.write_bytes("".join(lines).encode("utf-8"))
     os.replace(scratch, notes_file)  # the game never sees half a file
@@ -330,26 +352,44 @@ def answer_waiting(wow_root: Path, state_file: Path, facts_for: Callable[[int], 
     if not notes_file.parent.is_dir():
         return 0
     requests: dict[int, str] = {}
+    unexplained: dict[int, str] = {}
     for path in saved_variable_files(wow_root):
         try:
-            requests.update(read_requests(path.read_text(encoding="utf-8", errors="replace")))
+            saved = path.read_text(encoding="utf-8", errors="replace")
         except OSError:  # the game is writing it; the next look reads it
             return 1
+        requests.update(read_requests(saved))
+        unexplained.update(read_requests(saved, UNEXPLAINED))
     notes = read_notes(notes_file)
     state = load_state(state_file)
-    waiting, changed = 0, False
-    for item_id, name in sorted(requests.items()):
+    asked = sorted(requests.items())
+    asked_ids = set(requests)
+    found = sorted((item_id, name) for item_id, name in unexplained.items() if item_id not in requests)
+    requests.update(unexplained)
+    waiting, changed, answered = 0, False, False
+    status = was = read_status(notes_file)
+    for item_id, name in asked + found:
         if item_id in notes:
             continue
         tries = state.get(str(item_id)) or {}
         if now() < tries.get("next", 0):
             waiting += 1
             continue
+        if item_id not in asked_ids and answered:  # one found item per pass: a click is never kept waiting long
+            waiting += 1
+            continue
+        answered = True
         facts, note = None, ""
         try:
             facts = facts_for(item_id)
             note = ask(prompt_for(facts)) if facts else "Wowhead has no page for this item."
         except NoAnswer as why:
+            if "Not logged in" in str(why):  # the CLI is signed out: nothing about the item, so not a try
+                log(f"item {item_id} ({name}): {why} (not counted; waiting for the sign-in)")
+                status = SIGNED_OUT
+                state[str(item_id)] = {**tries, "next": now() + RETRY_SECONDS}
+                waiting += 1
+                continue
             count = tries.get("count", 0) + 1
             log(f"item {item_id} ({name}): {why} (try {count} of {MAX_TRIES})")
             if count < MAX_TRIES:
@@ -358,11 +398,12 @@ def answer_waiting(wow_root: Path, state_file: Path, facts_for: Callable[[int], 
                 continue
             note = fallback_note(facts)
         notes[item_id] = (plain(note, NOTE_CHARS), name)
+        status = ""  # an answer was written: whatever held lookups up is over
         state.pop(str(item_id), None)
         changed = True
         log(f"item {item_id} ({name}): {notes[item_id][0]}")
-    if changed:
-        write_notes(notes_file, notes)
+    if changed or status != was:
+        write_notes(notes_file, notes, status)
     state = {key: value for key, value in state.items() if key.isdigit() and int(key) in requests and int(key) not in notes}
     try:
         state_file.parent.mkdir(parents=True, exist_ok=True)
