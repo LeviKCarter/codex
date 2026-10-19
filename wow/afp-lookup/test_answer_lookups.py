@@ -37,6 +37,15 @@ AuctionatorForeverPricesScan = {
 }
 '''
 
+CLICKS_ONLY = SAVED.replace('[6948] = {\n["name"] = "Hearthstone",\n},\n', "")
+assert CLICKS_ONLY != SAVED
+
+
+def found_only(*names):
+    """Saved variables with no click, only these unexplained bag items (ids 11, 12, ...)."""
+    items = "".join(f'[{11 + i}] = {{\n["name"] = "{name}",\n["why"] = "no auction price",\n}},\n' for i, name in enumerate(names))
+    return 'AuctionatorForeverPricesSettings = {\n["lookupRequests"] = {\n},\n["unexplainedItems"] = {\n' + items + "},\n}\n"
+
 PAGE = '''<html><head><meta name="description" content="This ring goes in the &quot;Finger&quot; slot. It is a quest reward from Coming of Age. An item from Classic World of Warcraft."></head>
 <script>var lv_comments0 = [{"body":"Can delete. [b]Crazy[\\/b] they take a bag slot!","id":1},{"body":"Can equip,\\r\\nwastes 0 bag spaces.","id":2}];</script></html>'''
 TOOLTIP = json.dumps({"name": "Ancient Heirloom", "tooltip": '<table><tr><td><b class="q1">Ancient Heirloom</b><!--x--><br>'
@@ -54,7 +63,7 @@ class Case(unittest.TestCase):
         self.root = Path(self.tmp.name)
         self.saved = self.root / "WTF" / "Account" / "1#1" / "SavedVariables" / "AuctionatorForeverPrices.lua"
         self.saved.parent.mkdir(parents=True)
-        self.saved.write_text(SAVED, encoding="utf-8")
+        self.saved.write_text(CLICKS_ONLY, encoding="utf-8")  # the click tests; FoundItems adds an unexplained item
         self.notes = self.root / "Interface" / "AddOns" / "AuctionatorForeverPrices" / "ItemNotes.lua"
         self.notes.parent.mkdir(parents=True)
         self.state = self.root / "state.json"
@@ -71,6 +80,8 @@ class Case(unittest.TestCase):
         return job.answer_waiting(self.root, self.state, facts_for or (lambda item_id: facts()),
                                   ask or default_ask, now=lambda: self.clock)
 
+
+class Clicks(Case):
     def test_reads_only_the_requests(self):
         self.assertEqual(job.read_requests(SAVED), {264908: "Ancient Heirloom", 2589: 'Linen "Fine" Cloth {x}'})
         self.assertEqual(job.read_requests("AuctionatorForeverPricesSettings = {\n}\n"), {})
@@ -305,6 +316,70 @@ class GameVersion(unittest.TestCase):
         script.write_text("x = 1\n", encoding="utf-8")
         with self.assertRaises(TimeoutError):
             self.watch(script, lambda look: None)
+
+
+class FoundItems(Case):
+    """Bag items the addon saved under unexplainedItems are looked up without a click."""
+
+    def setUp(self):
+        super().setUp()
+        self.saved.write_text(SAVED.replace('"Hearthstone"', '"Earth Totem"').replace("[6948]", "[5175]"), encoding="utf-8")
+
+    def test_reads_the_unexplained_list(self):
+        self.assertEqual(job.read_requests(SAVED, job.UNEXPLAINED), {6948: "Hearthstone"})
+
+    def test_clicks_first_then_one_found_item_per_pass(self):
+        self.assertEqual(self.run_pass(), 1)  # both clicks answered; the found item waits for the next pass
+        self.assertEqual(sorted(job.read_notes(self.notes)), [2589, 264908])
+        self.assertEqual(self.run_pass(), 0)
+        self.assertEqual(job.read_notes(self.notes)[5175], ("A quest reward with no use. Wear it or delete it.", "Earth Totem"))
+        self.assertEqual(len(self.asked), 3)
+        self.asked.clear()
+        self.assertEqual(self.run_pass(), 0)  # answered once, never asked again
+        self.assertEqual(self.asked, [])
+
+    def test_found_items_go_one_at_a_time(self):
+        self.saved.write_text(found_only("A", "B"), encoding="utf-8")
+        self.assertEqual(job.read_requests(found_only("A", "B")), {})
+        self.assertEqual(self.run_pass(), 1)
+        self.assertEqual(sorted(job.read_notes(self.notes)), [11])
+        self.assertEqual(self.run_pass(), 0)
+        self.assertEqual(sorted(job.read_notes(self.notes)), [11, 12])
+
+    def test_a_found_item_that_fails_is_retried_like_a_click(self):
+        self.saved.write_text(found_only("A"), encoding="utf-8")
+        def down(prompt):
+            raise job.NoAnswer("Claude exited 1")
+        self.assertEqual(self.run_pass(ask=down), 1)
+        self.assertIn("11", json.loads(self.state.read_text()))
+        self.clock += job.RETRY_SECONDS + 1
+        self.assertEqual(self.run_pass(), 0)
+        self.assertIn(11, job.read_notes(self.notes))
+
+    def test_a_signed_out_claude_is_never_counted_as_a_try(self):
+        self.saved.write_text(found_only("A"), encoding="utf-8")
+        def signed_out(prompt):
+            raise job.NoAnswer("Claude exited 1: Not logged in · Please run /login")
+        for _ in range(job.MAX_TRIES + 2):  # as on 2026-10-13: three passes wrote Wowhead's summary as the note
+            self.assertEqual(self.run_pass(ask=signed_out), 1)
+            self.clock += job.RETRY_SECONDS + 1
+        self.assertEqual(job.read_notes(self.notes), {})  # no note, only the reason it is on hold
+        self.assertEqual(job.read_status(self.notes), job.SIGNED_OUT)
+        self.assertEqual(self.run_pass(), 0)  # signed in again: Claude's line, not the fallback
+        self.assertEqual(job.read_notes(self.notes)[11][0], "A quest reward with no use. Wear it or delete it.")
+        self.assertEqual(job.read_status(self.notes), "")
+
+    def test_the_hold_is_lua_the_game_can_load(self):
+        try:
+            from lupa import lua51 as lupa
+        except ImportError:
+            self.skipTest("lupa is not installed")
+        job.write_notes(self.notes, {5: ('By "hand".', "Old")}, 'signed "out" \\ now')
+        lua = lupa.LuaRuntime()
+        lua.execute(self.notes.read_text(encoding="utf-8"))
+        self.assertEqual(lua.eval("AFP_LookupStatus"), 'signed "out" \\ now')
+        self.assertEqual(lua.eval("AFP_ItemNotes[5]"), 'By "hand".')
+        self.assertEqual(job.read_notes(self.notes), {5: ('By "hand".', "Old")})
 
 
 if __name__ == "__main__":

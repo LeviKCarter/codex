@@ -45,6 +45,27 @@ remove what turns out wrong, and say when something is only a suspicion.
   then: a hang on closing the map that still blames Spoken_Zones means the addon as its author wrote it does this,
   not our patch; say which it is. Questie (Krowi_WorldMapButtons), QuestieForeverGamepad and MapUtils still carry
   the same kind of patch: say so if a log blames one of them on a map close.
+- 2026-10-12 10:50: with Spoken_Zones' own SetAlpha hook back, the game's movement fader failed on the open map every
+  frame ("attempt to call a nil value", PlayerMovementFrameFader.lua:9, 118 times). From then on the patcher only
+  removes that hook and adds no per-frame reader on the map (its OnMapChanged hook in Core.lua is still as the author
+  wrote it). A hang on closing the map that blames Spoken_Zones after this is not the old reader.
+- 2026-10-12 11:19:38 hang, build 70338: within about 20 s of a /reload (Levi: "reload>crash"), the reload that
+  loaded Forever Shared Prices 2026-10-12.3 (its Discard/Sell and Unignore bag buttons moved into a holder outside
+  the bag window). The reload before, with only Unignore moved (.2), did not hang. The taint log was empty: the game
+  writes it in batches, so a hang loses the last lines. Main.lua was put back as before .2 (version .4). A hang on
+  a reload with .4 or later means .3 was not the cause.
+- 2026-10-15.22 of Forever Shared Prices moves Blizzard's bag search box (BagItemSearchBox) to the right end of its
+  line, from a per-frame watcher on the open combined bag, because the game puts it back on every bag update. No hook;
+  only the box's anchor changes. Untested in the game when made: a hang or controller fault with the bag open, or on
+  focusing its search, after that version is a suspect for it; say so.
+- SkyborneLeyLineConvergenceMarker puts its pins into the world map (AddDataProvider / AcquirePin). With the
+  controller interface, opening the map then taints the gamepad bindings: RunBinding(), DescendStop() and
+  SetPreferredGamepadInteractTarget() blocked, blamed on it, and the face buttons stop working. Hand-patched on
+  2026-10-03 to draw its own pins on the map canvas. The 0.3.1 update (installed 2026-10-12 09:38) undid that,
+  and it came back 2026-10-13. Since then the launch patcher (`wow\addon-hook-patches`) applies the patch, so an
+  update that still fits gets it back at the next start, and one that doesn't is reported as NOT PATCHED. The first
+  overlay put the pins just above the canvas, under the map's explored-area layer (frame levels near 2000), so pins
+  in explored areas were hidden. They now use the map's area-POI level, as the addon's own template did.
 - Not yet done: a session with every addon off, to separate Blizzard's own bug from addon taint.
 
 ## Crashes with a crash text (Errors folder)
