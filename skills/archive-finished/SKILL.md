@@ -50,13 +50,13 @@ PulseOps worktrees or the game folder, so the session's own worktree is clean ei
   (his standing rule is to auto-ship), so say that, not "waiting on your ship". Don't message it to ship: a session
   rightly refuses another session's order as his go-ahead (2026-10-19). Keep it, and under **For you** name the
   session and the one line he can type there: "ship it".
+- He has raised the problem again since the session's last report.
+- A review or background job came back with findings nobody has acted on.
 
 A question is Levi's only if the evidence can't settle it, or if it rests on a rule that is written down (memory or a
 `CLAUDE.md`). When a session measured something and made the call itself, it is finished, even when it then asks
 "should I do the other thing anyway?". Levi, 2026-10-19, about a judge model the session had measured and kept: "It
 decided that itself, didn't it? Why is it asking me that?"
-- He has raised the problem again since the session's last report.
-- A review or background job came back with findings nobody has acted on.
 
 **Unclear** (the session stopped partway, its last report contradicts itself, or you cannot tell): settle it
 yourself. Levi, 2026-10-17: "Resolve anything that's unclear yourself, or give it to me if you can't figure it
