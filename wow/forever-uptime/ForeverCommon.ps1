@@ -29,9 +29,16 @@ $script:TaintLogsKept = 10
 # Memory Windows must still be able to hand out before the game starts. On 2026-10-17 it crashed out of memory a
 # minute in with 2.4 GB free (the Claude app had grown to 19.5 GB), and it takes about 6.6 GB within minutes.
 $script:MinFreeGB = 10
-# While the game is open, Watch-Memory.ps1 warns below this much free, at most once every so many minutes.
+# While the game is open, Watch-Memory.ps1 quietly asks the Claude app to archive its finished sessions below this
+# much free, at most once every so many minutes. Nothing is shown for that.
 $script:WarnFreeGB = 5
 $script:WarnEveryMinutes = 15
+# Only below this much free does it show a notification (the game crashed at 2.4 GB on 2026-10-17): once per low
+# spell, again only when another $ToastWorseGB GB is gone, and it takes itself off the screen after $ToastSeconds.
+# Levi, 2026-10-19: the old one came back every 15 minutes at 4.9 GB and stayed until he dismissed it.
+$script:ToastFreeGB = 3
+$script:ToastWorseGB = 1
+$script:ToastSeconds = 20
 # ..\patch-day\patch_day.py writes this file while Claude fixes the addons for a new patch. A file older than this
 # many minutes is a run that died; it never holds the game back.
 $script:PatchCheck = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-patch-day-running.txt'

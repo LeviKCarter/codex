@@ -3,7 +3,9 @@
 # (ForeverCommon.ps1), and the forum watch going wrong must not stop this one, or the other way round.
 # The script watches for ever, so the task has no time limit; it is started at logon and looked at again every
 # 10 minutes, and a start while it is running is ignored, so there is only ever one. conhost --headless runs it
-# with no window at all. Run it again after Watch-Memory.ps1 changes: the running copy is stopped, the new one started.
+# with no window at all. A running copy stops by itself when Watch-Memory.ps1 or ForeverCommon.ps1 changes and the
+# next 10-minute start runs the new one; running this again does it at once (the running copy is stopped, the new
+# one started).
 param(
     [string]$Script = "C:\Users\levik\Documents\Codex\wow\forever-uptime\Watch-Memory.ps1",
     [string]$TaskName = "WoW Forever Memory Watch"
@@ -27,7 +29,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" |
     Where-Object { $_.CommandLine -like "*forever-uptime*Watch-Memory.ps1*" -and $_.CommandLine -notlike "*-Once*" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $logon, $again -Settings $settings `
-    -Principal $principal -Force -Description "While WoW Forever (WowB.exe) is open, a Windows notification when free memory drops below 5 GB, naming the program to restart before the game crashes out of memory. Watch-Memory.ps1." | Out-Null
+    -Principal $principal -Force -Description "While WoW Forever (WowB.exe) is open: below 5 GB free memory it quietly asks the Claude app to archive finished sessions; below 3 GB a notification that clears itself names the program to restart before the game crashes out of memory. Watch-Memory.ps1." | Out-Null
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 Get-ScheduledTask -TaskName $TaskName | Select-Object TaskName, State
