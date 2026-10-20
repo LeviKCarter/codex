@@ -183,7 +183,9 @@ try {
     Check 'CurseForge failed: the game starts anyway and a note says why' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'CurseForge did not start. The game started anyway.')
     Set-CurseForge 0 $null; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
-    Check 'an updater that dies without a word: the game starts, a note says so' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'the updater stopped without a result. The game started anyway.')
+    $ok = $p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'the updater stopped without a result. The game started anyway.'
+    Check 'an updater that dies without a word: the game starts, a note says so' $ok
+    if (!$ok) { Write-Output ("     exited {0}, launched {1}, note '{2}'" -f $p.HasExited, (Test-Path "$dir\launched.txt"), (Get-CurseForgeNote)) }
     $env:WOWFOREVER_CF_TIMEOUT = '1'
     Set-CurseForge 60 @('OK'); Reset-Case
     $p = Run-Start; $p.WaitForExit(25000) | Out-Null
@@ -201,9 +203,38 @@ try {
     Set-Content -LiteralPath $winFile -Value 'minimised please'
     Check 'window memory: anything else reads as Normal' ((Get-WindowMemory $winFile) -eq 'Normal')
     Remove-Item -LiteralPath "$dir\window-memory" -Recurse -Force
-    Add-Type -Namespace WoWForeverTest -Name Win -MemberDefinition '[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c); [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);'
+    # The window by its title among the start script's own windows. Not Process.MainWindowHandle: that skips hidden
+    # and owned windows, and once the script has exited PowerShell reads it as $null (2026-10-20, first run on the PC).
+    Add-Type -Namespace WoWForeverTest -Name Win -UsingNamespace System.Text -MemberDefinition @'
+public delegate bool EnumProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+public static IntPtr Find(int pid, string title) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows(delegate(IntPtr h, IntPtr l) {
+        uint p;
+        GetWindowThreadProcessId(h, out p);
+        if (p != (uint)pid) return true;
+        StringBuilder s = new StringBuilder(64);
+        GetWindowText(h, s, 64);
+        if (s.ToString() != title) return true;
+        found = h;
+        return false;
+    }, IntPtr.Zero);
+    return found;
+}
+'@
+    # [IntPtr]::Zero when the window never came up; the wait after finding it lets the form finish showing itself.
     function Get-CurseForgeWindow($p) {
-        foreach ($i in 1..40) { $p.Refresh(); if ($p.MainWindowHandle -ne [IntPtr]::Zero) { return $p.MainWindowHandle }; Start-Sleep -Milliseconds 250 }
+        foreach ($i in 1..40) {
+            if ($p.HasExited) { break }
+            $h = [WoWForeverTest.Win]::Find($p.Id, 'WoW Forever')
+            if ($h -ne [IntPtr]::Zero) { Start-Sleep -Milliseconds 500; return $h }
+            Start-Sleep -Milliseconds 250
+        }
         return [IntPtr]::Zero
     }
     function Get-WindowFile { if (Test-Path "$dir\curseforge-window.txt") { (Get-Content "$dir\curseforge-window.txt" -Raw).Trim() } else { '' } }
