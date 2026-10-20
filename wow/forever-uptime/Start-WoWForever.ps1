@@ -300,7 +300,7 @@ if ($go) {
         }
     } catch { }
     # Addon code that breaks the controller (an update brought it in, or last session's blocked calls point at it):
-    # Claude fixes it through the hook patcher first (..\addon-guard), and the game waits. Never stops it otherwise.
+    # Claude reports on it (..\addon-guard; it only fixes with --apply, and the game then waits). Never stops it otherwise.
     try {
         if (!(Test-GameRunning) -and (Start-AddonGuard)) {
             $patch = Get-PatchCheck

@@ -12,6 +12,7 @@ import tempfile
 import textwrap
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).parent))
 import addon_guard as guard
@@ -189,7 +190,8 @@ class Fix(Folder):
         return guard.fix(self.job, addons=self.addons, managed={"Cf"}, reports=self.reports, backups=self.backups,
                          patcher=self.patcher, accepted_file=self.accepted, ask=ask,
                          suite=suite or (lambda root: (set(), "")),
-                         patcher_tests=patcher_tests or (lambda: (set(), "")), tell=None, marker=self.marker)
+                         patcher_tests=patcher_tests or (lambda: (set(), "")), tell=None, marker=self.marker,
+                         apply=True)
 
     def patch_entry(self):
         (self.patcher / "patches.json").write_text(json.dumps(
@@ -290,6 +292,48 @@ class Fix(Folder):
         self.assertEqual(json.loads((self.patcher / "patches.json").read_text(encoding="utf-8")), [])
         self.assertIn("could not look at it", self.report(bundle))
         self.assertFalse(self.marker.exists())
+
+
+
+class Report(Fix):
+    """--fix without --apply (the default since 2026-10-20): Claude reads, nothing changes, the game does not wait."""
+
+    def report_run(self, step):
+        def ask(bundle, dirs, prompt):
+            self.seen_marker.append(self.marker.exists())
+            self.asked.append(prompt)
+            step()
+            return "SUMMARY: AmmoKeeper hooks the tracker\n\n## Suggested fix\n\nA PATCHES entry"
+
+        return guard.fix(self.job, addons=self.addons, managed={"Cf"}, reports=self.reports, backups=self.backups,
+                         patcher=self.patcher, accepted_file=self.accepted, ask=ask, tell=None, marker=self.marker)
+
+    def test_it_reports_and_changes_nothing_and_the_game_does_not_wait(self):
+        bundle = self.report_run(lambda: None)
+        self.assertEqual(self.seen_marker, [False])
+        self.assertIn("change nothing", self.asked[0])
+        self.assertIn(HOOK, self.hooked.read_text(encoding="utf-8"))
+        self.assertEqual(json.loads((self.patcher / "patches.json").read_text(encoding="utf-8")), [])
+        report = self.report(bundle)
+        self.assertIn("Suggested fix", report)
+        self.assertIn("only reports", report)
+        self.assertIn("Cf/a.lua:2 [method-hook]", report)
+
+    def test_an_edit_made_anyway_is_put_back(self):
+        bundle = self.report_run(self.hand_edit)
+        self.assertIn(HOOK, self.hooked.read_text(encoding="utf-8"))
+        self.assertIn("put back", self.report(bundle))
+
+    def test_no_answer_still_reports(self):
+        def fail():
+            raise guard.patch_day.NoAnswer("Claude could not be run")
+        bundle = self.report_run(fail)
+        self.assertIn("could not look at it", self.report(bundle))
+
+    def test_the_cli_gets_no_edit_tools(self):
+        with mock.patch.object(guard.patch_day, "ask_claude", return_value="x") as ask:
+            guard.read_only_ask(self.reports, [], "")
+        self.assertIs(ask.call_args.kwargs["edits"], False)
 
 
 if __name__ == "__main__":

@@ -130,8 +130,9 @@ function Repair-AddonHooks {
 }
 
 # ..\addon-guard\addon_guard.py: --scan finds addon code an update brought in that breaks the controller, or blocked
-# controller calls from the last sessions, and exits 3 when there is something new; --fix then has Claude fix it,
-# writing the patch-check file while it works. Returns $true once that fix is running (Get-PatchCheck sees it).
+# controller calls from the last sessions, and exits 3 when there is something new; --fix then has Claude report on it
+# (since 2026-10-20 it changes nothing, so it writes no patch-check file and the game does not wait; --fix --apply
+# fixes and writes it). Returns $true once a fix is running (Get-PatchCheck sees it).
 # Tests: guard.ps1 in the test folder stands in for both (-Mode scan / -Mode fix); without it nothing runs.
 function Start-AddonGuard {
     $ps = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'

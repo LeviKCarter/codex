@@ -406,15 +406,16 @@ def prompt_for(bundle: Path, folders: list[Path], failing: set[str], retry: str 
     )
 
 
-def ask_claude(bundle: Path, folders: list[Path], prompt: str) -> str:
-    """Claude's report: the signed-in CLI with file tools only, editing the bundle and the addon folders."""
+def ask_claude(bundle: Path, folders: list[Path], prompt: str, edits: bool = True) -> str:
+    """Claude's report: the signed-in CLI with file tools only, editing the bundle and the addon folders (with
+    `edits` off it can only read them)."""
     sys.path.insert(0, str(PULSE_AGENT))
     try:
         from events_ledger import find_claude
         from model_jobs import CLAUDE_LEAN
 
         dirs = [arg for folder in folders for arg in ("--add-dir", str(folder))]
-        command = [str(find_claude()), "-p", "--model", MODEL, "--tools", "Read,Grep,Glob,Edit,Write",
+        command = [str(find_claude()), "-p", "--model", MODEL, "--tools", "Read,Grep,Glob,Edit,Write" if edits else "Read,Grep,Glob",
                    "--permission-mode", "acceptEdits", "--permission-prompts", "none", *dirs, *CLAUDE_LEAN,
                    "--no-session-persistence", "--output-format", "json"]
         # A Claude session's own variables would put this call under that session's settings; a scheduled task has none.
