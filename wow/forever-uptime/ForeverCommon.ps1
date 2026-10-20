@@ -44,6 +44,29 @@ $script:ToastSeconds = 20
 $script:PatchCheck = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-patch-day-running.txt'
 if ($script:TestDir) { $script:PatchCheck = Join-Path $script:TestDir 'patch-check.txt' }
 $script:PatchCheckMinutes = 90
+# How he left the "Updating your addons through CurseForge" window last time: Minimized or Normal. Minimized, it opens
+# minimized on the taskbar the next time (Levi, 2026-10-20: "If I minimize this, remember it the next time it goes").
+$script:CurseForgeWindowFile = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-forever-curseforge-window.txt'
+if ($script:TestDir) { $script:CurseForgeWindowFile = Join-Path $script:TestDir 'curseforge-window.txt' }
+
+# 'Minimized' when he left that window minimized, else 'Normal' (no file, an unreadable one, or anything else in it).
+function Get-WindowMemory([string]$Path) {
+    try {
+        if ((Test-Path -LiteralPath $Path) -and ([IO.File]::ReadAllText($Path).Trim() -eq 'Minimized')) { return 'Minimized' }
+    } catch { }
+    return 'Normal'
+}
+
+# Keeps Minimized or Normal; any other state (Maximized) is not his choice to remember. Never in the way of the game.
+function Save-WindowMemory([string]$Path, [string]$State) {
+    if ($State -ne 'Minimized' -and $State -ne 'Normal') { return }
+    if ((Get-WindowMemory $Path) -eq $State -and (Test-Path -LiteralPath $Path)) { return }
+    try {
+        $parent = Split-Path -Parent $Path
+        if ($parent -and !(Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+        [IO.File]::WriteAllText($Path, $State)
+    } catch { }
+}
 
 # The patch check that is running now: Label (the build) and Started, or $null.
 function Get-PatchCheck {
