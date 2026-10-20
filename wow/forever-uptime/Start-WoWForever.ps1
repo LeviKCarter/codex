@@ -174,7 +174,7 @@ function Wait-ForPatchCheck($patch) {
 }
 
 # Updates the addons CurseForge manages (Update-CurseForgeAddons.ps1, which closes CurseForge when done) while a small
-# window says so; it closes by itself. $null = start the game, else a short note on why the addons were not updated
+# window says so; it closes by itself, and opens minimized when he left it minimized last time. $null = start the game, else a short note on why the addons were not updated
 # ($false = he pressed Cancel). Too slow: the updater and CurseForge are stopped and the game starts anyway.
 function Wait-ForCurseForge {
     $result = Join-Path ([IO.Path]::GetTempPath()) ('wowforever-curseforge-{0}.txt' -f [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -203,6 +203,9 @@ function Wait-ForCurseForge {
     $cancel.DialogResult = [Windows.Forms.DialogResult]::Cancel
     $form.Controls.AddRange(@($label, $anyway, $cancel))
     $form.CancelButton = $cancel
+    # He minimized it last time: it opens minimized on the taskbar. Minimizing or restoring it is kept for next time.
+    if ((Get-WindowMemory $script:CurseForgeWindowFile) -eq 'Minimized') { $form.WindowState = [Windows.Forms.FormWindowState]::Minimized }
+    $form.Add_Resize({ if ($form.Visible) { Save-WindowMemory $script:CurseForgeWindowFile "$($form.WindowState)" } })
     # The updater stops itself at its own timeout and still closes CurseForge; this is the backstop past that.
     $giveUp = (Get-Date).AddSeconds($script:CurseForgeTimeoutSec + $script:CurseForgeGraceSec)
     $timer = New-Object Windows.Forms.Timer

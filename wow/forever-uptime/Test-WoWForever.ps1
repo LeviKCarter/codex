@@ -183,12 +183,82 @@ try {
     Check 'CurseForge failed: the game starts anyway and a note says why' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'CurseForge did not start. The game started anyway.')
     Set-CurseForge 0 $null; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
-    Check 'an updater that dies without a word: the game starts, a note says so' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'the updater stopped without a result. The game started anyway.')
+    $ok = $p.HasExited -and (Test-Path "$dir\launched.txt") -and (Get-CurseForgeNote) -eq 'the updater stopped without a result. The game started anyway.'
+    Check 'an updater that dies without a word: the game starts, a note says so' $ok
+    if (!$ok) { Write-Output ("     exited {0}, launched {1}, note '{2}'" -f $p.HasExited, (Test-Path "$dir\launched.txt"), (Get-CurseForgeNote)) }
     $env:WOWFOREVER_CF_TIMEOUT = '1'
     Set-CurseForge 60 @('OK'); Reset-Case
     $p = Run-Start; $p.WaitForExit(25000) | Out-Null
     Check 'CurseForge too slow: it is stopped, the game starts, a note says so' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and (Test-Path "$dir\curseforge-stopped.txt") -and (Get-CurseForgeNote) -eq 'CurseForge took over 3 seconds. The game started anyway.')
     $env:WOWFOREVER_CF_TIMEOUT = $null
+    # The CurseForge window remembers being minimized (Levi, 2026-10-20): what is kept, then the real window.
+    $winFile = "$dir\window-memory\curseforge-window.txt"
+    Check 'window memory: nothing kept reads as Normal' ((Get-WindowMemory $winFile) -eq 'Normal')
+    Save-WindowMemory $winFile 'Minimized'
+    Check 'window memory: Minimized is kept, its folder made' ((Get-WindowMemory $winFile) -eq 'Minimized')
+    Save-WindowMemory $winFile 'Maximized'
+    Check 'window memory: Maximized is not kept' ((Get-WindowMemory $winFile) -eq 'Minimized')
+    Save-WindowMemory $winFile 'Normal'
+    Check 'window memory: Normal replaces Minimized' ((Get-WindowMemory $winFile) -eq 'Normal')
+    Set-Content -LiteralPath $winFile -Value 'minimised please'
+    Check 'window memory: anything else reads as Normal' ((Get-WindowMemory $winFile) -eq 'Normal')
+    Remove-Item -LiteralPath "$dir\window-memory" -Recurse -Force
+    # The window by its title among the start script's own windows. Not Process.MainWindowHandle: that skips hidden
+    # and owned windows, and once the script has exited PowerShell reads it as $null (2026-10-20, first run on the PC).
+    Add-Type -Namespace WoWForeverTest -Name Win -UsingNamespace System.Text -MemberDefinition @'
+public delegate bool EnumProc(IntPtr h, IntPtr l);
+[DllImport("user32.dll")] public static extern bool EnumWindows(EnumProc f, IntPtr l);
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+[DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+[DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr h, int c);
+[DllImport("user32.dll")] public static extern bool IsIconic(IntPtr h);
+public static IntPtr Find(int pid, string title) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows(delegate(IntPtr h, IntPtr l) {
+        uint p;
+        GetWindowThreadProcessId(h, out p);
+        if (p != (uint)pid) return true;
+        StringBuilder s = new StringBuilder(64);
+        GetWindowText(h, s, 64);
+        if (s.ToString() != title) return true;
+        found = h;
+        return false;
+    }, IntPtr.Zero);
+    return found;
+}
+'@
+    # [IntPtr]::Zero when the window never came up; the wait after finding it lets the form finish showing itself.
+    function Get-CurseForgeWindow($p) {
+        foreach ($i in 1..40) {
+            if ($p.HasExited) { break }
+            $h = [WoWForeverTest.Win]::Find($p.Id, 'WoW Forever')
+            if ($h -ne [IntPtr]::Zero) { Start-Sleep -Milliseconds 500; return $h }
+            Start-Sleep -Milliseconds 250
+        }
+        return [IntPtr]::Zero
+    }
+    function Get-WindowFile { if (Test-Path "$dir\curseforge-window.txt") { (Get-Content "$dir\curseforge-window.txt" -Raw).Trim() } else { '' } }
+    Remove-Item "$dir\curseforge-window.txt" -ErrorAction SilentlyContinue
+    Set-CurseForge 5 @('OK'); Reset-Case
+    $p = Run-Start; $w = Get-CurseForgeWindow $p
+    Check 'CurseForge window: it opens on screen the first time' ($w -ne [IntPtr]::Zero -and ![WoWForeverTest.Win]::IsIconic($w))
+    [WoWForeverTest.Win]::ShowWindow($w, 6) | Out-Null   # SW_MINIMIZE, as his click on the title bar does
+    Start-Sleep -Milliseconds 500
+    Check 'CurseForge window: minimizing it is kept' ((Get-WindowFile) -eq 'Minimized')
+    $p.WaitForExit(20000) | Out-Null
+    Check 'CurseForge window: minimized, the game still starts when it is done' ($p.HasExited -and (Test-Path "$dir\launched.txt"))
+    Set-CurseForge 5 @('OK'); Reset-Case
+    $p = Run-Start; $w = Get-CurseForgeWindow $p
+    Check 'CurseForge window: the next one opens minimized' ($w -ne [IntPtr]::Zero -and [WoWForeverTest.Win]::IsIconic($w))
+    [WoWForeverTest.Win]::ShowWindow($w, 9) | Out-Null   # SW_RESTORE, as his click on the taskbar button does
+    Start-Sleep -Milliseconds 500
+    Check 'CurseForge window: restoring it is kept' ((Get-WindowFile) -eq 'Normal')
+    $p.WaitForExit(20000) | Out-Null
+    Set-CurseForge 5 @('OK'); Reset-Case
+    $p = Run-Start; $w = Get-CurseForgeWindow $p
+    Check 'CurseForge window: after a restore it opens on screen again' ($w -ne [IntPtr]::Zero -and ![WoWForeverTest.Win]::IsIconic($w))
+    $p.WaitForExit(20000) | Out-Null
+    Remove-Item "$dir\curseforge-window.txt" -ErrorAction SilentlyContinue
     Set-CurseForge 0 @('OK'); Set-Content -LiteralPath "$dir\game-running.txt" -Value 'yes'; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'game open: CurseForge is not started' ((Test-Path "$dir\launched.txt") -and !(Test-Path "$dir\cf-ran.txt"))
