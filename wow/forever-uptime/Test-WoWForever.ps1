@@ -409,6 +409,18 @@ public static IntPtr Find(int pid, string title) {
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'the same misfit is said once' ((Test-Path "$dir\launched.txt") -and !(Test-Path "$dir\said-misfit.txt"))
 
+    # Which client: the file decides; with none, the new one once its Wow.exe is installed.
+    $pick = "$dir\wow-client.txt"
+    Check 'client: the beta while _forever_ has no Wow.exe' ((Get-WoWClientName $dir $pick) -eq 'beta')
+    New-Item -ItemType Directory -Path "$dir\_forever_" -Force | Out-Null
+    Set-Content -LiteralPath "$dir\_forever_\Wow.exe" -Value ''
+    Check 'client: the new one once it is installed' ((Get-WoWClientName $dir $pick) -eq 'forever')
+    Set-Content -LiteralPath $pick -Value 'beta'
+    Check 'client: the file takes it back to the beta' ((Get-WoWClientName $dir $pick) -eq 'beta')
+    Set-Content -LiteralPath $pick -Value 'classic'
+    Check 'client: a word it does not know is ignored' ((Get-WoWClientName $dir $pick) -eq 'forever')
+    Remove-Item -LiteralPath "$dir\_forever_", $pick -Recurse -Force
+
     Remove-Item -LiteralPath $beta -Recurse -Force; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'no game folder: the game still starts' ($p.HasExited -and (Test-Path "$dir\launched.txt"))

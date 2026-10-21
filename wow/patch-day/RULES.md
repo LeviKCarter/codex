@@ -2,7 +2,8 @@
 
 Learned in earlier sessions. Keep this current when a patch-day run teaches something new.
 
-- The game is the WoW Forever beta (`_classic_beta_`, `## Interface: 16001` for client 1.60.1). Levi plays with a
+- The game is WoW Forever (`## Interface: 16001` for client 1.60.1): the beta in `_classic_beta_` until 2026-10-23, then
+  the new client in `_forever_` (`wow\wow_client.py` picks). Levi plays with a
   controller (gamepad UI). Every button or panel must work with the controller, and anything that taints the
   interface makes his controller buttons stop working.
 - Never hook a Blizzard object's method: no `hooksecurefunc(WorldMapFrame, ...)`, no `hooksecurefunc(GameTooltip,

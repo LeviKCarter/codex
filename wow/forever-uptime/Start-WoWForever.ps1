@@ -307,6 +307,6 @@ if ($go) {
             if ($patch) { $go = Wait-ForPatchCheck $patch }
         }
     } catch { }
-    if ($go) { & $launcher }
+    if ($go) { & $launcher -GameExe $script:GameExe }
     if ($go -and $cfNote) { try { Show-Note ("{0}. The game started anyway." -f "$cfNote".TrimEnd('.')) } catch { } }
 }

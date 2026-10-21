@@ -44,8 +44,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import wow_client  # noqa: E402  (which client: the beta or _forever_)
+
 HERE = Path(__file__).resolve().parent
-ADDONS = Path(r"D:\Games\World of Warcraft\_classic_beta_\Interface\AddOns")
+ADDONS = wow_client.addons_dir()
 REPORTS = HERE / "reports"
 BACKUPS = HERE / "backups"
 RULES = HERE / "RULES.md"
@@ -60,7 +63,7 @@ PYTHON = r"C:\Users\levik\miniforge3\python.exe"
 POWERSHELL = r"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe"
 NO_WINDOW = 0x08000000 if os.name == "nt" else 0
 
-PRODUCT = "wow_classic_beta"
+PRODUCT = wow_client.product()
 VERSIONS = f"http://us.patch.battle.net:1119/{PRODUCT}/versions"
 FORUM = "https://us.forums.blizzard.com/en/wow"
 CATEGORY = 349  # WoW: Forever Beta Discussion
