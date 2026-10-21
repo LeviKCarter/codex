@@ -9,7 +9,10 @@
 # -Check says what it would change and changes nothing. ASCII only.
 param([Parameter(Mandatory = $true)][ValidateSet('forever', 'beta')][string]$Client, [switch]$Check)
 $ErrorActionPreference = 'Stop'
+# ForeverCommon.ps1 sets $script:Client (the client in use), which is this script's -Client: keep the one asked for.
+$wantClient = $Client
 . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
+$Client = $wantClient
 # Tests (WOWFOREVER_TEST_DIR): Steam is the Steam folder in there, and no program is asked about or shut down.
 $steamDir = if ($script:TestDir) { Join-Path $script:TestDir 'Steam' } else { 'C:\Program Files (x86)\Steam' }
 $appName = 'WowB'
