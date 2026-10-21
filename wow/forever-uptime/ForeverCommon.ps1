@@ -1,9 +1,32 @@
 # Shared by Start-WoWForever.ps1 and Notify-Back.ps1. ASCII only: Windows PowerShell 5.1 reads a file with no BOM as ANSI.
-$script:Product = 'wow_classic_beta'
 $script:WowRoot = 'D:\Games\World of Warcraft'
-$script:GameExe = Join-Path $script:WowRoot '_classic_beta_\WowB.exe'
+# Which client: the Forever beta (closes 2026-10-23) or the one Battle.net installs as _forever_ for the 2026-10-21
+# stress test and the 2026-11-04 launch. %LOCALAPPDATA%\PulseAgent\wow-client.txt says forever or beta
+# (Set-WoWClient.ps1 writes it); with no file, the new client once its Wow.exe is there. ..\wow_client.py does the same.
+$script:Clients = @{
+    forever = @{ Dir = '_forever_'; Exe = 'Wow.exe'; Product = 'wowf' }
+    beta = @{ Dir = '_classic_beta_'; Exe = 'WowB.exe'; Product = 'wow_classic_beta' }
+}
+$script:ClientFile = Join-Path $env:LOCALAPPDATA 'PulseAgent\wow-client.txt'
+function Get-WoWClientName([string]$Root, [string]$File) {
+    try {
+        if (Test-Path -LiteralPath $File) {
+            $said = ([IO.File]::ReadAllText($File)).Trim().ToLowerInvariant()
+            if ($script:Clients.ContainsKey($said)) { return $said }
+        }
+    } catch { }
+    $new = $script:Clients.forever
+    if (Test-Path -LiteralPath (Join-Path $Root (Join-Path $new.Dir $new.Exe)) -PathType Leaf) { return 'forever' }
+    return 'beta'
+}
+# Tests stay on the beta unless WOWFOREVER_CLIENT names the other one.
+$script:Client = if ($env:WOWFOREVER_TEST_DIR) { if ($env:WOWFOREVER_CLIENT) { $env:WOWFOREVER_CLIENT } else { 'beta' } } else { Get-WoWClientName $script:WowRoot $script:ClientFile }
+$script:Product = $script:Clients[$script:Client].Product
+$script:GameExe = Join-Path $script:WowRoot (Join-Path $script:Clients[$script:Client].Dir $script:Clients[$script:Client].Exe)
+# The game's process name: Wow or WowB.
+$script:GameProcess = [IO.Path]::GetFileNameWithoutExtension($script:GameExe)
 $script:Shortcut = Join-Path $env:APPDATA 'Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar\WoW Forever.lnk'
-$script:DotIcon = Join-Path $PSScriptRoot 'WowB-dot.ico'
+$script:DotIcon = Join-Path $PSScriptRoot "$($script:GameProcess)-dot.ico"
 $script:BattleNet = 'C:\Program Files (x86)\Battle.net\Battle.net Launcher.exe'
 $script:Launcher = 'C:\Users\levik\Documents\Codex\2026-10-09\can-x20\outputs\Launch-WoW-Steam.ps1'
 # Updates the CurseForge addons and closes CurseForge again; last line OK, NOTHING or FAILED: <why>.
@@ -21,9 +44,10 @@ if ($script:TestDir) {
     $script:DotIcon = Join-Path $script:TestDir 'WowB-dot.ico'
     $script:Launcher = Join-Path $script:TestDir 'launcher.ps1'
     $script:CurseForgeUpdater = Join-Path $script:TestDir 'curseforge.ps1'
+    $script:ClientFile = Join-Path $script:TestDir 'wow-client.txt'
     if ($env:WOWFOREVER_CF_TIMEOUT) { $script:CurseForgeTimeoutSec = [int]$env:WOWFOREVER_CF_TIMEOUT; $script:CurseForgeGraceSec = 2 }
 }
-$script:BetaDir = Join-Path $script:WowRoot '_classic_beta_'
+$script:GameDir = Join-Path $script:WowRoot $script:Clients[$script:Client].Dir
 $script:TaintLevel = 2       # 1 = blocked actions only, 2 = also who tainted what (needed to find the addon behind a hang)
 $script:TaintLogsKept = 10
 # Memory Windows must still be able to hand out before the game starts. On 2026-10-17 it crashed out of memory a
@@ -82,17 +106,17 @@ function Get-PatchCheck {
 # $true while the game is open; its files are only touched when it is not. Tests: a game-running.txt in the folder.
 function Test-GameRunning {
     if ($script:TestDir) { return (Test-Path -LiteralPath (Join-Path $script:TestDir 'game-running.txt')) }
-    return [bool](Get-Process -Name WowB -ErrorAction SilentlyContinue)
+    return [bool](Get-Process -Name $script:GameProcess -ErrorAction SilentlyContinue)
 }
 
 # The game empties Logs\taint.log when it starts, so the log of a hang was gone by the time anyone read it.
 # Copies the last session's log to Logs\taint-kept, named by when it was last written, and keeps the newest few.
 function Save-TaintLog {
-    $log = Join-Path $script:BetaDir 'Logs\taint.log'
+    $log = Join-Path $script:GameDir 'Logs\taint.log'
     if (!(Test-Path -LiteralPath $log)) { return }
     $item = Get-Item -LiteralPath $log
     if ($item.Length -eq 0) { return }
-    $kept = Join-Path $script:BetaDir 'Logs\taint-kept'
+    $kept = Join-Path $script:GameDir 'Logs\taint-kept'
     New-Item -ItemType Directory -Path $kept -Force | Out-Null
     $copy = Join-Path $kept ('taint-{0:yyyy-MM-dd_HH.mm.ss}.log' -f $item.LastWriteTime)
     if (!(Test-Path -LiteralPath $copy)) { Copy-Item -LiteralPath $log -Destination $copy }
@@ -103,7 +127,7 @@ function Save-TaintLog {
 # Turns the game's taint log on in WTF\Config.wtf (the game writes the file itself when it closes, so only while
 # it is closed). Every other line is left as it is.
 function Set-TaintLogging {
-    $config = Join-Path $script:BetaDir 'WTF\Config.wtf'
+    $config = Join-Path $script:GameDir 'WTF\Config.wtf'
     if (!(Test-Path -LiteralPath $config)) { return }
     $want = 'SET taintLog "{0}"' -f $script:TaintLevel
     $text = [IO.File]::ReadAllText($config)
@@ -125,7 +149,7 @@ function Repair-AddonHooks {
     $patcher = Join-Path $PSScriptRoot '..\addon-hook-patches\patch_addon_hooks.py'
     $python = (Get-Command python -ErrorAction SilentlyContinue).Source
     if (!$python -or !(Test-Path -LiteralPath $patcher)) { return }
-    $report = & $python $patcher --addons (Join-Path $script:BetaDir 'Interface\AddOns')
+    $report = & $python $patcher --addons (Join-Path $script:GameDir 'Interface\AddOns')
     if ($LASTEXITCODE -eq 2) { return ($report -join "`n") }
 }
 
@@ -163,7 +187,7 @@ function Start-AddonGuard {
 # grew, one file per session (a shorter log than last time is a new session), newest $script:TaintLogsKept kept.
 # $State is a hashtable the caller keeps between calls.
 function Copy-LiveTaintLog($State) {
-    $log = Join-Path $script:BetaDir 'Logs\taint.log'
+    $log = Join-Path $script:GameDir 'Logs\taint.log'
     if (!(Test-Path -LiteralPath $log)) { return }
     $size = (Get-Item -LiteralPath $log).Length
     $last = if ($State.ContainsKey('Size')) { $State.Size } else { 0 }
@@ -172,7 +196,7 @@ function Copy-LiveTaintLog($State) {
     }
     $State.Size = $size
     if ($size -eq 0 -or $size -eq $last) { return }
-    $live = Join-Path $script:BetaDir 'Logs\taint-live'
+    $live = Join-Path $script:GameDir 'Logs\taint-live'
     New-Item -ItemType Directory -Path $live -Force | Out-Null
     Copy-Item -LiteralPath $log -Destination (Join-Path $live $State.File) -Force
     Get-ChildItem -LiteralPath $live -Filter 'taint-live-*.log' | Sort-Object Name -Descending |
@@ -263,7 +287,7 @@ function New-DotIcon {
     Add-Native
     $handles = New-Object IntPtr[] 1
     $ids = New-Object uint32[] 1
-    if ([WoWForever.Native]::PrivateExtractIcons($script:GameExe, 0, 256, 256, $handles, $ids, 1, 0) -lt 1) { throw 'No icon in WowB.exe.' }
+    if ([WoWForever.Native]::PrivateExtractIcons($script:GameExe, 0, 256, 256, $handles, $ids, 1, 0) -lt 1) { throw "No icon in $script:GameExe." }
     $bmp = New-Object Drawing.Bitmap 256, 256
     $g = [Drawing.Graphics]::FromImage($bmp)
     try {

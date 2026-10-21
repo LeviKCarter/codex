@@ -22,7 +22,10 @@ import sys
 import time
 from pathlib import Path
 
-DEFAULT_ADDONS = Path(r"D:\Games\World of Warcraft\_classic_beta_\Interface\AddOns")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import wow_client  # noqa: E402  (which client: the beta or _forever_)
+
+DEFAULT_ADDONS = wow_client.addons_dir()
 MARK = "Forever patch"
 HERE = Path(__file__).resolve().parent
 

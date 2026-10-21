@@ -49,7 +49,7 @@ function Write-Log($text) {
 
 # "the Claude app (19.5 GB)": the program to restart, never the game itself.
 function Get-Culprit($mem) {
-    $top = $mem.Top | Where-Object { $_.Name -ne 'WowB' } | Select-Object -First 1
+    $top = $mem.Top | Where-Object { $_.Name -ne $script:GameProcess } | Select-Object -First 1
     if (!$top) { return $null }
     $name = if ($top.Name -eq 'claude') { 'the Claude app' } else { $top.Name }
     return '{0} ({1:N1} GB)' -f $name, $top.GB
@@ -155,7 +155,7 @@ $sources = @($PSCommandPath, (Join-Path $PSScriptRoot 'ForeverCommon.ps1'))
 function Get-SourceStamp { return (($sources | ForEach-Object { (Get-Item -LiteralPath $_).LastWriteTimeUtc.Ticks }) -join ',') }
 $stamp = Get-SourceStamp
 
-Write-Log "watching memory while WowB is open: archiver below $WarnBelowGB GB (at most every $script:WarnEveryMinutes minutes), notification below $ToastBelowGB GB"
+Write-Log "watching memory while $script:GameProcess is open: archiver below $WarnBelowGB GB (at most every $script:WarnEveryMinutes minutes), notification below $ToastBelowGB GB"
 $was = ''
 $waited = $checkSeconds
 while ($true) {

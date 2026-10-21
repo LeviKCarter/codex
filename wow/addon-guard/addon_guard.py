@@ -53,7 +53,7 @@ sys.path.insert(0, str(PATCH_DAY))
 sys.path.insert(0, str(PATCHER))
 import patch_day  # noqa: E402  (ask_claude, compile_errors, run_suite, notify, backups, RUNNING)
 
-GAME = Path(r"D:\Games\World of Warcraft\_classic_beta_")
+GAME = patch_day.wow_client.game_dir()  # the beta or _forever_ (..\wow_client.py)
 ADDONS = GAME / "Interface" / "AddOns"
 SAVED = GAME / "WTF" / "Account" / "958879396#1" / "SavedVariables" / "AuctionatorForeverPrices.lua"
 TAINT_KEPT = GAME / "Logs" / "taint-kept"

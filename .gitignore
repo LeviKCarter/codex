@@ -31,6 +31,9 @@
 !userscripts/maps-links/**
 # The job that answers the WoW addon's item lookups (the addon itself lives in the game folder, not in git).
 !wow/
+# Which client the wow tools work on: the Forever beta or the new _forever_ one (wow/forever-uptime/Set-WoWClient.ps1).
+!wow/wow_client.py
+!wow/test_wow_client.py
 !wow/afp-lookup/
 !wow/afp-lookup/answer_lookups.py
 !wow/afp-lookup/test_answer_lookups.py

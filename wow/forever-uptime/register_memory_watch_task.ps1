@@ -29,7 +29,7 @@ Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe'" |
     Where-Object { $_.CommandLine -like "*forever-uptime*Watch-Memory.ps1*" -and $_.CommandLine -notlike "*-Once*" } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $logon, $again -Settings $settings `
-    -Principal $principal -Force -Description "While WoW Forever (WowB.exe) is open: below 5 GB free memory it quietly asks the Claude app to archive finished sessions; below 3 GB a notification that clears itself names the program to restart before the game crashes out of memory. Watch-Memory.ps1." | Out-Null
+    -Principal $principal -Force -Description "While WoW Forever (Wow.exe, or WowB.exe on the beta) is open: below 5 GB free memory it quietly asks the Claude app to archive finished sessions; below 3 GB a notification that clears itself names the program to restart before the game crashes out of memory. Watch-Memory.ps1." | Out-Null
 Start-ScheduledTask -TaskName $TaskName
 Start-Sleep -Seconds 3
 Get-ScheduledTask -TaskName $TaskName | Select-Object TaskName, State

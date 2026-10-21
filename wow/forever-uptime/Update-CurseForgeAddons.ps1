@@ -10,8 +10,22 @@ param([int]$TimeoutSec = 240, [string]$ResultPath = '', [switch]$Probe, [switch]
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
 $exe =Join-Path $env:LOCALAPPDATA 'Programs\CurseForge Windows\CurseForge.exe'
-$instanceId = 'bc0cce03-10dd-4cbb-9a2c-e6e7769eafbc'   # CurseForge's "Forever" instance: D:\Games\World of Warcraft\_classic_beta_
+$betaInstanceId = 'bc0cce03-10dd-4cbb-9a2c-e6e7769eafbc'   # CurseForge's "Forever" instance: D:\Games\World of Warcraft\_classic_beta_
 $db = Join-Path $env:APPDATA 'CurseForge\agent\GameInstances\AddonGameInstance.json'
+
+# The instance for the client the tools are on (ForeverCommon.ps1): the one whose folder is that client's, found by
+# any of its text fields naming the folder, since the beta's id is the only one known. The beta falls back to its id.
+function Get-InstanceId {
+    $all = [IO.File]::ReadAllText($db) | ConvertFrom-Json
+    $want = $script:GameDir.TrimEnd('\')
+    foreach ($i in $all) {
+        foreach ($prop in $i.PSObject.Properties) {
+            if ($prop.Value -is [string] -and $prop.Value.TrimEnd('\', '/') -ieq $want) { return $i.guid }
+        }
+    }
+    if ($script:Client -eq 'beta') { return $betaInstanceId }
+    throw "CurseForge has no instance for $want yet (add that folder in CurseForge)"
+}
 $logs = Join-Path $env:APPDATA 'CurseForge\logs'
 $deadline = (Get-Date).AddSeconds($TimeoutSec)
 $out = New-Object Collections.Generic.List[string]
@@ -107,6 +121,7 @@ function Close-CurseForge {
 $status = $null
 try {
     if (!(Test-Path -LiteralPath $exe)) { throw 'CurseForge is not installed' }
+    $instanceId = Get-InstanceId
     $before = Get-Installed
     if (!(Get-Process -Name CurseForge -ErrorAction SilentlyContinue)) { Start-Process -FilePath $exe -ArgumentList '--minimized' }
 

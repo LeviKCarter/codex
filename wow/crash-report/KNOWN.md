@@ -5,8 +5,9 @@ remove what turns out wrong, and say when something is only a suspicion.
 
 ## The game
 
-- WoW Classic "Forever" beta, `D:\Games\World of Warcraft\_classic_beta_`, program `WowB.exe`. Levi plays with a
-  controller (8BitDo Ultimate 2) and the game's own controller interface.
+- WoW Forever: the beta in `D:\Games\World of Warcraft\_classic_beta_` (`WowB.exe`, closes 2026-10-23), and from the
+  2026-10-21 stress test on the new client in `_forever_` (`Wow.exe`, Battle.net product `wowf`). `wow\wow_client.py`
+  says which one the tools are on. Levi plays with a controller (8BitDo Ultimate 2) and the game's own controller interface.
 - The taint log is on at level 2 when the game is started from the "WoW Forever" taskbar shortcut. A start from
   Battle.net leaves it as it was, so a missing taint log does not mean nothing was tainted.
 

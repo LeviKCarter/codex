@@ -6,7 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-ADDONS = Path(r"D:\Games\World of Warcraft\_classic_beta_\Interface\AddOns")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+import wow_client  # noqa: E402  (which client: the beta or _forever_)
+
+ADDONS = wow_client.addons_dir()
 afp = Path(sys.argv[1]) if len(sys.argv) > 1 else ADDONS / "AuctionatorForeverPrices"
 mailer = Path(sys.argv[2]) if len(sys.argv) > 2 else ADDONS / "ForeverAutoMailer"
 PY = r"C:\Users\levik\miniforge3\python.exe"
