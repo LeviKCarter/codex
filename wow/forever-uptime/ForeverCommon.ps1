@@ -44,6 +44,7 @@ if ($script:TestDir) {
     $script:DotIcon = Join-Path $script:TestDir 'WowB-dot.ico'
     $script:Launcher = Join-Path $script:TestDir 'launcher.ps1'
     $script:CurseForgeUpdater = Join-Path $script:TestDir 'curseforge.ps1'
+    $script:ClientFile = Join-Path $script:TestDir 'wow-client.txt'
     if ($env:WOWFOREVER_CF_TIMEOUT) { $script:CurseForgeTimeoutSec = [int]$env:WOWFOREVER_CF_TIMEOUT; $script:CurseForgeGraceSec = 2 }
 }
 $script:GameDir = Join-Path $script:WowRoot $script:Clients[$script:Client].Dir

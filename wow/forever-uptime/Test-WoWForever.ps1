@@ -421,6 +421,24 @@ public static IntPtr Find(int pid, string title) {
     Check 'client: a word it does not know is ignored' ((Get-WoWClientName $dir $pick) -eq 'forever')
     Remove-Item -LiteralPath "$dir\_forever_", $pick -Recurse -Force
 
+    # Set-WoWClient.ps1: Steam's "WowB" shortcut follows the client, keeping its name, app id and every other byte.
+    $latin = [Text.Encoding]::GetEncoding(28591)
+    $o = [string][char]1; $z = [string][char]0
+    function Vdf($exe, $start) { "$z" + 'shortcuts' + $z + [char]0 + '0' + $z + [char]2 + 'appid' + $z + ':xyz' + $o + 'AppName' + $z + 'WowB' + $z + $o + 'Exe' + $z + $exe + $z + $o + 'StartDir' + $z + $start + $z + $o + 'icon' + $z + $z + [char]8 + [char]8 + [char]8 + [char]8 }
+    $vdf = "$dir\Steam\userdata\1\config\shortcuts.vdf"
+    New-Item -ItemType Directory -Path (Split-Path $vdf), "$dir\_forever_" -Force | Out-Null
+    Set-Content -LiteralPath "$dir\_forever_\Wow.exe", "$dir\_classic_beta_\WowB.exe" -Value ''
+    $betaVdf = Vdf "`"$dir\_classic_beta_\WowB.exe`"" "$dir\_classic_beta_\"
+    [IO.File]::WriteAllBytes($vdf, $latin.GetBytes($betaVdf))
+    & (Join-Path $PSScriptRoot 'Set-WoWClient.ps1') forever -Check | Out-Null
+    Check 'client switch: -Check changes nothing' ($latin.GetString([IO.File]::ReadAllBytes($vdf)) -eq $betaVdf -and !(Test-Path "$dir\wow-client.txt"))
+    & (Join-Path $PSScriptRoot 'Set-WoWClient.ps1') forever | Out-Null
+    Check 'client switch: Steam''s shortcut starts the new client' ($latin.GetString([IO.File]::ReadAllBytes($vdf)) -eq (Vdf "`"$dir\_forever_\Wow.exe`"" "$dir\_forever_\"))
+    Check 'client switch: the old file is kept and the choice written' (@(Get-ChildItem "$(Split-Path $vdf)\shortcuts.vdf.*.bak").Count -eq 1 -and (Get-Content "$dir\wow-client.txt" -Raw).Trim() -eq 'forever')
+    & (Join-Path $PSScriptRoot 'Set-WoWClient.ps1') beta | Out-Null
+    Check 'client switch: and back to the beta' ($latin.GetString([IO.File]::ReadAllBytes($vdf)) -eq $betaVdf -and (Get-Content "$dir\wow-client.txt" -Raw).Trim() -eq 'beta')
+    Remove-Item -LiteralPath "$dir\_forever_", "$dir\Steam", "$dir\wow-client.txt" -Recurse -Force
+
     Remove-Item -LiteralPath $beta -Recurse -Force; Reset-Case
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'no game folder: the game still starts' ($p.HasExited -and (Test-Path "$dir\launched.txt"))

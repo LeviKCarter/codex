@@ -10,7 +10,8 @@
 param([Parameter(Mandatory = $true)][ValidateSet('forever', 'beta')][string]$Client, [switch]$Check)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
-$steamDir = 'C:\Program Files (x86)\Steam'
+# Tests (WOWFOREVER_TEST_DIR): Steam is the Steam folder in there, and no program is asked about or shut down.
+$steamDir = if ($script:TestDir) { Join-Path $script:TestDir 'Steam' } else { 'C:\Program Files (x86)\Steam' }
 $appName = 'WowB'
 
 $want = $script:Clients[$Client]
@@ -25,9 +26,9 @@ $field = [string][char]1 + 'AppName' + [char]0 + $appName + [char]0
 $changes = @()
 foreach ($f in @(Get-ChildItem -Path (Join-Path $steamDir 'userdata\*\config\shortcuts.vdf') -ErrorAction SilentlyContinue)) {
     $text = $latin.GetString([IO.File]::ReadAllBytes($f.FullName))
-    $at = $text.IndexOf($field)
+    $at = $text.IndexOf($field, [StringComparison]::Ordinal)
     if ($at -lt 0) { continue }
-    $end = $text.IndexOf([string][char]8 + [char]8, $at)
+    $end = $text.IndexOf([string][char]8 + [char]8, $at, [StringComparison]::Ordinal)
     if ($end -lt 0) { $end = $text.Length }
     $entry = $text.Substring($at, $end - $at)
     $new = [regex]::Replace($entry, '(\x01Exe\x00)[^\x00]*(\x00)', ('$1"' + $exe.Replace('$', '$$') + '"$2'))
@@ -42,8 +43,8 @@ if ($Check) {
 }
 
 if ($changes.Count) {
-    if (Get-Process -Name Wow, WowB -ErrorAction SilentlyContinue) { throw 'WoW is open. Close it first: Steam would put the shortcut back when it quits.' }
-    if (Get-Process -Name steam -ErrorAction SilentlyContinue) {
+    if (!$script:TestDir -and (Get-Process -Name Wow, WowB -ErrorAction SilentlyContinue)) { throw 'WoW is open. Close it first: Steam would put the shortcut back when it quits.' }
+    if (!$script:TestDir -and (Get-Process -Name steam -ErrorAction SilentlyContinue)) {
         Start-Process -FilePath (Join-Path $steamDir 'steam.exe') -ArgumentList '-shutdown'
         $until = (Get-Date).AddSeconds(60)
         while ((Get-Process -Name steam -ErrorAction SilentlyContinue) -and (Get-Date) -lt $until) { Start-Sleep -Milliseconds 500 }
