@@ -31,10 +31,12 @@ local function NewFrame(kind, parent)
   function f:SetScale(s) self.scale = s end
   function f:ClearAllPoints() self.points = {} end
   function f:SetPoint(...) self.points = { ... } end
+  function f:SetParent(p) self.parent = p end
   frames[#frames + 1] = f
   return f
 end
-function CreateFrame(kind, name, parent) return NewFrame(kind, parent) end
+MADE_ON_CANVAS = 0
+function CreateFrame(kind, name, parent) if parent ~= nil and parent == Canvas then MADE_ON_CANVAS = MADE_ON_CANVAS + 1 end return NewFrame(kind, parent) end
 function Frames(n) for _ = 1, n do for _, f in ipairs(onUpdates) do if f.shown then f.scripts.OnUpdate(f, 0.2) end end end end
 
 local canvas = NewFrame("Frame")
@@ -129,6 +131,14 @@ class WorldMap(unittest.TestCase):
         lua = self.lua
         lua.execute("MapState(true) Frames(3) Canvas.zoom = 2 Frames(3)")
         self.assertEqual(lua.eval("WorldmapPins[1].scale"), 0.5)
+
+    def test_no_frame_is_made_on_the_canvas(self):
+        # SmartNavigation hooks CreateFrame: a frame made with the open map's canvas as its parent refreshes the map's
+        # controller panel in this add-on's run. Pins are made with no parent and then put on the canvas.
+        lua = self.lua
+        lua.execute("MapState(true) Frames(3) MapState(true, 1411) Frames(3)")
+        self.assertTrue(shown_pins(lua))
+        self.assertEqual(lua.eval("MADE_ON_CANVAS"), 0)
 
     def test_the_map_is_only_read(self):
         lua = self.lua
