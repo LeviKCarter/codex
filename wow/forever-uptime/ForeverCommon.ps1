@@ -203,7 +203,9 @@ function Copy-LiveTaintLog($State) {
         Select-Object -Skip $script:TaintLogsKept | Remove-Item -Force
 }
 
-# The build Battle.net last finished installing: the product's row in the game folder's .build.info.
+# The build Battle.net last finished installing: the product's row in the game folder's .build.info. $null when
+# Battle.net no longer lists the product there (on 2026-10-22 it held only wowf while the beta still ran): nothing to
+# compare, so the game starts without a check, as when Blizzard's list can't be reached.
 function Get-InstalledBuild {
     $lines = Get-Content -LiteralPath (Join-Path $script:WowRoot '.build.info')
     $names = $lines[0].Split('|') | ForEach-Object { $_.Split('!')[0] }
@@ -213,7 +215,7 @@ function Get-InstalledBuild {
             return [pscustomobject]@{ Key = $cells[[Array]::IndexOf($names, 'Build Key')]; Version = $cells[[Array]::IndexOf($names, 'Version')] }
         }
     }
-    throw "No $script:Product row in .build.info."
+    return $null
 }
 
 # The build Blizzard is serving now (the same list Battle.net reads). $null when it can't be reached.

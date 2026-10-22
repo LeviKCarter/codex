@@ -50,7 +50,15 @@ try {
     $p = Run-Start; $p.WaitForExit(20000) | Out-Null
     Check 'no build list: the game starts as before' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and !(Test-Path "$dir\battlenet-started.txt"))
 
-    Set-Blizzard $old '1.60.1.1'; Reset-Case
+    Set-Blizzard $old '1.60.1.1'
+    Set-Content -LiteralPath "$dir\.build.info" -Value @(
+        'Branch!STRING:0|Active!DEC:1|Build Key!HEX:16|CDN Key!HEX:16|Version!STRING:0|Product!STRING:0',
+        "us|1|ffffffffffffffffffffffffffffffff|aa|9.9.9.1|wowf")
+    Check 'check says UNKNOWN when .build.info has no row for the client' ((& $start -Check) -like 'UNKNOWN: installed nothing (wow_classic_beta not in .build.info)*')
+    Reset-Case
+    $p = Run-Start; $p.WaitForExit(20000) | Out-Null
+    Check 'no row in .build.info: the game starts with no message' ($p.HasExited -and (Test-Path "$dir\launched.txt") -and !(Test-Path "$dir\battlenet-started.txt"))
+    Set-Installed $old '1.60.1.1'; Reset-Case
     . (Join-Path $PSScriptRoot 'ForeverCommon.ps1')
     Set-ShortcutDot $true
     Check 'the dot goes on the shortcut' ((New-Object -ComObject WScript.Shell).CreateShortcut("$dir\WoW Forever.lnk").IconLocation -eq "$dir\WowB-dot.ico,0")
