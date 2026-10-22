@@ -62,9 +62,6 @@
 !wow/addon-hook-patches/gathermate2/world-map.original.lua
 !wow/addon-hook-patches/gathermate2/world-map.patched.lua
 !wow/addon-hook-patches/gathermate2/test_world_map.py
-!wow/addon-hook-patches/gathermate2/hbd-pins.original.lua
-!wow/addon-hook-patches/gathermate2/hbd-pins.patched.lua
-!wow/addon-hook-patches/gathermate2/test_hbd_pins.py
 # WoW Forever: before each launch, finds addon code that breaks the controller and has Claude fix it (reports/ and
 # backups/ stay out).
 !wow/addon-guard/
