@@ -329,6 +329,34 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
             ),
         ],
     },
+    # GatherMate2: its world map pins were Blizzard map pins too (AddDataProvider / AcquirePin), and on 2026-10-21
+    # (23:09:46 local) opening the map tainted the controller as GatherMate2: 411 fields in AFP's scan, then
+    # SetPreferredGamepadInteractTarget(), TargetUnit() and ClearTarget() blocked. Same fix as Skyborne's below.
+    "GatherMate2": {
+        "Display.lua": [
+            (
+                "the map's AddDataProvider",
+                "\tWorldMapFrame:AddDataProvider(Display.WorldMapDataProvider)\n",
+                "\tself.worldmapWatcher:Show() -- Forever patch: was WorldMapFrame:AddDataProvider(Display.WorldMapDataProvider)\n",
+            ),
+            (
+                "world map pins into the minimap pin cache",
+                "\tclearpins(worldmapPins)\n",
+                "\tself.WorldMapDataProvider:RemoveAllData() -- Forever patch: the world map pins are not minimap pins\n",
+            ),
+            (
+                "the map's RemoveDataProvider",
+                "\tWorldMapFrame:RemoveDataProvider(Display.WorldMapDataProvider)\n",
+                "\tself.worldmapWatcher:Hide() -- Forever patch: was WorldMapFrame:RemoveDataProvider(Display.WorldMapDataProvider)\n"
+                "\tself.WorldMapDataProvider:RemoveAllData()\n",
+            ),
+            (
+                "world map data provider and pins",
+                part("gathermate2/world-map.original.lua"),
+                part("gathermate2/world-map.patched.lua"),
+            ),
+        ],
+    },
     # SkyborneLeyLineConvergenceMarker: its pins were Blizzard map pins (AddDataProvider / AcquirePin), and with the
     # controller interface opening the map then blocked RunBinding(), DescendStop() and
     # SetPreferredGamepadInteractTarget(), blamed on it: the face buttons stopped working (2026-10-03, again

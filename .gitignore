@@ -57,6 +57,11 @@
 !wow/addon-hook-patches/skyborne/map-pins.original.lua
 !wow/addon-hook-patches/skyborne/map-pins.patched.lua
 !wow/addon-hook-patches/skyborne/test_overlay.py
+# GatherMate2's world map patch text and its test (GatherMate2 is GPL v2).
+!wow/addon-hook-patches/gathermate2/
+!wow/addon-hook-patches/gathermate2/world-map.original.lua
+!wow/addon-hook-patches/gathermate2/world-map.patched.lua
+!wow/addon-hook-patches/gathermate2/test_world_map.py
 # WoW Forever: before each launch, finds addon code that breaks the controller and has Claude fix it (reports/ and
 # backups/ stay out).
 !wow/addon-guard/
