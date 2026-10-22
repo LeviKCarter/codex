@@ -356,17 +356,6 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
                 part("gathermate2/world-map.patched.lua"),
             ),
         ],
-        # Its HereBeDragons-Pins is the only copy of that library loaded, so other add-ons' map icons (Pulse Ops Pin's
-        # Now card star) were Blizzard map pins under GatherMate2's name: on 2026-10-22 (09:09:29 local), with
-        # Display.lua above already patched, closing the map blocked SetPreferredGamepadInteractTarget() as
-        # GatherMate2 again. Same fix: frames of its own on the canvas, and the map only read.
-        "Libs/HereBeDragons/HereBeDragons-Pins-2.0.lua": [
-            (
-                "world map data provider and pins",
-                part("gathermate2/hbd-pins.original.lua"),
-                part("gathermate2/hbd-pins.patched.lua"),
-            ),
-        ],
     },
     # SkyborneLeyLineConvergenceMarker: its pins were Blizzard map pins (AddDataProvider / AcquirePin), and with the
     # controller interface opening the map then blocked RunBinding(), DescendStop() and
