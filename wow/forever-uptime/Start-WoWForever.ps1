@@ -15,10 +15,10 @@ $giveUpAfter = if ($env:WOWFOREVER_GIVE_UP) { [int]$env:WOWFOREVER_GIVE_UP } els
 if ($Check -or $Uri -match '^wowforever:/*check') {
     $have = Get-InstalledBuild
     $want = Get-CurrentBuild
-    $state = if (!$want) { 'UNKNOWN' } elseif ($want.Key -eq $have.Key) { 'CURRENT' } else { 'OUT OF DATE' }
+    $state = if (!$want -or !$have) { 'UNKNOWN' } elseif ($want.Key -eq $have.Key) { 'CURRENT' } else { 'OUT OF DATE' }
     $mem = Get-MemoryState
     $memText = if ($mem) { '{0:N1} GB free ({1} needed; biggest {2})' -f $mem.FreeGB, $script:MinFreeGB, (Format-MemoryTop $mem) } else { 'not read' }
-    $line = "{0}: installed {1}, Blizzard has {2}; launcher {3}; uri '{4}'; memory {5}" -f $state, $have.Version, $(if ($want) { $want.Version } else { 'no answer' }), $(if (Test-Path -LiteralPath $launcher) { 'found' } else { 'MISSING' }), $Uri, $memText
+    $line = "{0}: installed {1}, Blizzard has {2}; launcher {3}; uri '{4}'; memory {5}" -f $state, $(if ($have) { $have.Version } else { "nothing ($script:Product not in .build.info)" }), $(if ($want) { $want.Version } else { 'no answer' }), $(if (Test-Path -LiteralPath $launcher) { 'found' } else { 'MISSING' }), $Uri, $memText
     [IO.File]::WriteAllText((Join-Path $PSScriptRoot 'last-check.txt'), $line)
     Write-Output $line
     return
@@ -259,8 +259,9 @@ try {
     if (!(Test-GameRunning)) {
         $have = Get-InstalledBuild
         $want = Get-CurrentBuild
-        # No answer from Blizzard's build list: nothing to compare, so start the game as before.
-        if ($want -and $want.Key -ne $have.Key) { $go = Wait-ForUpdate $have $want }
+        # No row for this client in .build.info, or no answer from Blizzard's build list: nothing to compare, so start
+        # the game as before.
+        if ($have -and $want -and $want.Key -ne $have.Key) { $go = Wait-ForUpdate $have $want }
     }
 } catch {
     [Windows.Forms.MessageBox]::Show("Could not check for an update: $($_.Exception.Message)`nStarting the game anyway.", 'WoW Forever') | Out-Null

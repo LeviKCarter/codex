@@ -6,7 +6,7 @@ $ErrorActionPreference = 'Stop'
 
 $have = Get-InstalledBuild
 $want = Get-CurrentBuild
-$stale = $want -and $want.Key -ne $have.Key
+$stale = $have -and $want -and $want.Key -ne $have.Key
 if (!$Text) {
     $Text = if ($stale) { "Updating to $($want.Version) now. Click to start the game when the update is done." } else { 'Your game is up to date. Click to start it.' }
 }
