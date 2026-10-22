@@ -155,6 +155,60 @@ class Watchers(unittest.TestCase):
             self.assertNotEqual(self.play(broken, field, value), [1, 1, 2, 2], f"{addon}/{name}")
 
 
+CHARACTER_ENV = """
+shows, hides = 0, 0
+local onUpdate
+CharacterFrame = { shown = false }
+function CharacterFrame:IsShown() return self.shown end
+function CharacterFrame:HookScript() error("hooked the character frame") end
+function CreateFrame() return { SetScript = function(_, _, fn) onUpdate = fn end } end
+function Frames(count) for _ = 1, count do onUpdate() end end
+local function Callback(set, action)
+\treturn function() if action == 'Show' then shows = shows + 1 else hides = hides + 1 end end
+end
+"""
+
+
+class BagBrotherPanels(unittest.TestCase):
+    """BagBrother's script hooks on Blizzard panels: no hook is left, and the character frame watcher fires its
+    show and hide callbacks once per open and once per close."""
+
+    def setUp(self):
+        self.patches = {name: patches for name, patches in job.PATCHES["BagBrother"].items()}
+
+    def play(self, snippet):
+        from lupa.lua51 import LuaRuntime
+        lua = LuaRuntime()
+        lua.execute(CHARACTER_ENV + snippet)
+        seen = []
+        for shown in (None, True, None, False, None):
+            if shown is not None:
+                lua.execute(f"CharacterFrame.shown = {str(shown).lower()}")
+            lua.execute("Frames(10)")
+            seen.append((lua.globals().shows, lua.globals().hides))
+        return seen
+
+    def test_no_script_hook_on_a_blizzard_panel_is_left(self):
+        for name in ("core/core.lua", "core/features/displayEvents.lua"):
+            (_, _, new), = self.patches[name]
+            self.assertNotIn("HookScript", new, name)
+
+    def test_the_character_frame_watcher_follows_each_open_and_close_once(self):
+        (_, _, new), = self.patches["core/features/displayEvents.lua"]
+        self.assertEqual(self.play(new), [(0, 0), (1, 0), (1, 0), (1, 1), (1, 1)])
+
+    def test_a_watcher_that_forgets_what_it_saw_is_caught(self):
+        (_, _, new), = self.patches["core/features/displayEvents.lua"]
+        broken = re.sub(r"\n\s*seenShown = shown\n", "\n", new)
+        self.assertNotEqual(broken, new)
+        self.assertNotEqual(self.play(broken), [(0, 0), (1, 0), (1, 0), (1, 1), (1, 1)])
+
+    def test_the_settings_patch_leaves_no_config_load_in_settings_show(self):
+        (_, old, new), = self.patches["core/core.lua"]
+        self.assertIn("LoadAddOn", old)
+        self.assertNotIn("LoadAddOn(", new)
+
+
 # A hook on a frame's own method: hooksecurefunc(<not a string>, ...), also through pcall.
 METHOD_HOOK = re.compile(r"hooksecurefunc\s*[(,]\s*(?!\")[\w.\[\]\"]+\s*,\s*[\w\"]")
 # Method hooks that never run on Forever: Spoken_Quests' shim and hooks inside its 1.12 / 2.4 blocks

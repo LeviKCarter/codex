@@ -242,6 +242,35 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
         ],
     },
     "BagBrother": {
+        # Script hooks on Blizzard panels run BagBrother's code inside the panel's own show, and on Forever that run
+        # then rewrites the controller's binding stack and SmartNavigation as Bagnon: the face buttons, the trigger
+        # pages and the soft-target icon stop ("SetPreferredGamepadInteractTarget() blocked", blamed on Bagnon).
+        # On 2026-10-21 (22:47:23 local) the first flip after a clean login came in the frame that opened Settings
+        # and loaded two addons; the same Settings-close block was in the 10/9 hang's taint log.
+        "core/core.lua": [
+            (
+                "the Settings list's OnShow",
+                "\tSettingsPanel.CategoryList:HookScript('OnShow', function() C.AddOns.LoadAddOn(ADDON .. '_Config') end)\n",
+                "\t-- Forever patch: Bagnon_Config is not loaded from inside Settings' own show (it tainted the controller);\n"
+                "\t-- /bagnon config and the addon compartment still load it through ShowOptions.\n",
+            ),
+        ],
+        "core/features/displayEvents.lua": [
+            (
+                "the character frame's OnShow and OnHide",
+                "\tCharacterFrame:HookScript('OnShow', Callback('character', 'Show'))\n"
+                "\tCharacterFrame:HookScript('OnHide', Callback('character', 'Hide'))\n",
+                "\t-- Forever patch: reads the character frame on every frame, in place of hooks on its OnShow and OnHide.\n"
+                "\tlocal show, hide, seenShown = Callback('character', 'Show'), Callback('character', 'Hide'), CharacterFrame:IsShown()\n"
+                "\tCreateFrame('Frame'):SetScript('OnUpdate', function()\n"
+                "\t\tlocal shown = CharacterFrame:IsShown()\n"
+                "\t\tif shown ~= seenShown then\n"
+                "\t\t\tseenShown = shown\n"
+                "\t\t\tif shown then show() else hide() end\n"
+                "\t\tend\n"
+                "\tend)\n",
+            ),
+        ],
         "core/features/uiOverrides.lua": [
             (
                 "the backpack's UpdateCurrencyFrames",
