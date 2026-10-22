@@ -56,27 +56,6 @@
   "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
  },
  {
-  "addon": "BetterMusicPlayer",
-  "file": "core/UI.lua",
-  "text": "func = function() StaticPopup_Show(\"BMP_NEW_PLAYLIST\") end,",
-  "rule": "popup",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "BetterMusicPlayer",
-  "file": "core/UI.lua",
-  "text": "StaticPopup_Show(\"BMP_RENAME_PLAYLIST\", nil, nil, node.listIndex)",
-  "rule": "popup",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "BetterMusicPlayer",
-  "file": "core/UI.lua",
-  "text": "StaticPopup_Show(\"BMP_NEW_PLAYLIST\")",
-  "rule": "popup",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
   "addon": "DungeonJourney",
   "file": "API/MapPins.lua",
   "text": "local pin=self:AcquirePin(canvas)",
@@ -115,41 +94,6 @@
   "addon": "ForeverLayerHop",
   "file": "ForeverLayerHop.lua",
   "text": "local ok = pcall(hooksecurefunc, GameTooltip, \"SetUnit\", function(self, unit)",
-  "rule": "method-hook",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "ForeverVO",
-  "file": "Core/Events.lua",
-  "text": "hooksecurefunc(C_GossipInfo, \"SelectOption\", function(optionID)",
-  "rule": "method-hook",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "ForeverVO",
-  "file": "Core/Events.lua",
-  "text": "hooksecurefunc(C_QuestLog, \"AbandonQuest\", function()",
-  "rule": "method-hook",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "ForeverVO",
-  "file": "Core/Settings.lua",
-  "text": "hooksecurefunc(frame, \"Init\", function(header, other)",
-  "rule": "method-hook",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "ForeverVO",
-  "file": "UI/Debug.lua",
-  "text": "hooksecurefunc(head, \"Present\", function(_, item)",
-  "rule": "method-hook",
-  "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
- },
- {
-  "addon": "ForeverVO",
-  "file": "UI/Debug.lua",
-  "text": "hooksecurefunc(head, \"CloseFrame\", function()",
   "rule": "method-hook",
   "reason": "Baseline 2026-10-17: present when X, the mailbox and NPCs were confirmed working after the Spoken_Quests tracker patch. Not proven safe, only not the cause then."
  },
