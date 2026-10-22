@@ -5,6 +5,9 @@
 -- SetPreferredGamepadInteractTarget(), TargetUnit() and ClearTarget() blocked, blamed on GatherMate2, after the map
 -- was opened (the first flip came in the frame the map opened, 2026-10-21 23:09:46). The pins are now plain frames
 -- of this addon's own on the map canvas, and the map is only read. UpdateWorldMap and DataUpdate still redraw them.
+-- A pin is made with no parent and then put on the canvas: with the controller UI, Blizzard's SmartNavigation hooks
+-- CreateFrame and refreshes the open panel a new frame's parent belongs to in the caller's run, so a pin made on the open
+-- map with the canvas as its parent refreshed the map's panel as GatherMate2.
 
 local worldmapUnused = {}
 local shownMapID, shownScale, shownWidth, shownHeight
@@ -27,7 +30,9 @@ end
 local function addWorldmapPin(canvas, scale, level, coord, nodeID, nodeType, pinZone)
 	local pin = table.remove(worldmapUnused)
 	if not pin then
-		pin = CreateFrame("Button", nil, canvas)
+		-- Made with no parent, then put on the canvas: see the note above.
+		pin = CreateFrame("Button")
+		pin:SetParent(canvas)
 		pin.texture = pin:CreateTexture(nil, "OVERLAY")
 		pin.texture:SetAllPoints(pin)
 		pin:RegisterForClicks("RightButtonUp")

@@ -35,6 +35,27 @@ def part(name: str) -> str:
     return (HERE / name).read_text(encoding="utf-8").replace("\r\n", "\n")
 
 
+def parentless_frames(first_line: str, indent: str = "\t") -> tuple[str, str, str]:
+    """A patch that shadows CreateFrame in one file so its frames are made with no parent and then put on it.
+
+    With the controller UI, Blizzard's SmartNavigation hooks CreateFrame and, when a new frame's parent belongs to an
+    open panel, refreshes that panel's buttons in the caller's run: a map pin made on the open world map by an add-on
+    refreshed the map's controller panel as that add-on, and the gamepad bindings were blocked (MapUtils, 2026-10-22).
+    SetParent is not hooked. Only for files whose frames have no template that reads its parent while it loads.
+    """
+    new = (
+        first_line
+        + "-- Forever patch: frames are made with no parent and then put on it, so Blizzard's SmartNavigation (which hooks\n"
+        + "-- CreateFrame) does not refresh an open panel's controller buttons as this add-on.\n"
+        + "local CreateFrame = function(frameType, name, parent, ...)\n"
+        + f"{indent}local frame = _G.CreateFrame(frameType, name, nil, ...)\n"
+        + f"{indent}if parent ~= nil then frame:SetParent(parent) end\n"
+        + f"{indent}return frame\n"
+        + "end\n"
+    )
+    return ("frames made before they are parented", first_line, new)
+
+
 # addon -> file -> [(what, old text, new text)]. Text uses \n; the file's own line ends are kept.
 PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
     "MapUtils": {
@@ -195,7 +216,24 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
                 "\t\t\tlabel:HookScript(\"OnUpdate\", AppendZoneLevel) -- Forever patch: was hooksecurefunc(label, \"EvaluateLabels\")\n",
             ),
         ],
+        "pins.lua": [
+            parentless_frames("local _, MapUtils = ...\n"),
+            (
+                "the world pin pool's parent",
+                "\tworldPinPool = CreateFramePool(\n\t\t\"BUTTON\",\n\t\tworldCanvas,\n",
+                "\tworldPinPool = CreateFramePool(\n\t\t\"BUTTON\",\n\t\tnil, -- Forever patch: parented when acquired (see CreateFrame above)\n",
+            ),
+            (
+                "world pins put on the canvas when acquired",
+                "\t\tlocal pin = worldPinPool:Acquire()\n",
+                "\t\tlocal pin = worldPinPool:Acquire()\n"
+                "\t\tif pin:GetParent() ~= child then pin:SetParent(child) end -- Forever patch: the pool makes them with no parent\n",
+            ),
+        ],
+        "questturnins.lua": [parentless_frames("local _, MapUtils = ...\n")],
+        "coords.lua": [parentless_frames("local _, MapUtils = ...\n")],
         "libs/D4Lib/D4Waypoints.lua": [
+            parentless_frames("local addonName, D4 = ...\n", "    "),
             (
                 "the map's OnMapChanged and OnCanvasScaleChanged",
                 "    if WorldMapFrame.OnMapChanged ~= nil then hooksecurefunc(WorldMapFrame, \"OnMapChanged\", Update) end\n"
@@ -354,6 +392,17 @@ PATCHES: dict[str, dict[str, list[tuple[str, str, str]]]] = {
                 "world map data provider and pins",
                 part("gathermate2/world-map.original.lua"),
                 part("gathermate2/world-map.patched.lua"),
+            ),
+        ],
+        # Its HereBeDragons-Pins is the only copy of that library loaded, so other add-ons' map icons (Pulse Ops Pin's
+        # Now card star) were Blizzard map pins under GatherMate2's name: on 2026-10-22 (09:09:29 local), with
+        # Display.lua above already patched, closing the map blocked SetPreferredGamepadInteractTarget() as
+        # GatherMate2 again. Same fix: frames of its own on the canvas, and the map only read.
+        "Libs/HereBeDragons/HereBeDragons-Pins-2.0.lua": [
+            (
+                "world map data provider and pins",
+                part("gathermate2/hbd-pins.original.lua"),
+                part("gathermate2/hbd-pins.patched.lua"),
             ),
         ],
     },
