@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Pulse Ops — Uber trip history
 // @namespace    levi.pulseops.uber-history
-// @version      1.2.0
+// @version      1.3.0
 // @updateURL    https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @downloadURL  https://raw.githubusercontent.com/LeviKCarter/codex/main/userscripts/Uber-Trip-History.user.js
 // @description  Hands the trips on Uber's driver site (pay, tip, miles, minutes) to Pulse Ops on this PC, one pay week at a time and slowly, for the weeks Pulse Ops still lacks.
@@ -467,8 +467,9 @@
     const weeks = [];
     for (const week of json.weeks) {
       if (!isWeek(week)) throw new Problem("Pulse: the PC named a week this can't read, so Uber was asked nothing.");
-      // A week that has not ended yet would be noted as done with its last days missing.
-      if (week.end > today || seen.has(week.start)) continue;
+      // The week under way is read as it stands (since 1.3.0: Levi, 2026-10-23, "the trip import should update to
+      // today"); the PC asks for it again once it has ended, for its last days. Only a week not yet begun is passed by.
+      if (week.start > today || seen.has(week.start)) continue;
       seen.add(week.start);
       weeks.push({ start: week.start, end: week.end });
     }
