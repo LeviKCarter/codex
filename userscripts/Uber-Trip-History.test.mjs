@@ -248,6 +248,15 @@ test("short weeks are read newest first and handed over, and the run ends with n
   assert.ok(stored(world, "lastRun") > 0);
 });
 
+test("the week under way is read as it stands when the PC lists it, and a week not yet begun is passed by", async () => {
+  // The clock is Wednesday 2026-10-07: the week of 10-05 is under way, the week of 10-12 has not begun.
+  const world = makeWorld({ "2026-09-28": 12, "2026-10-05": 7, "2026-10-12": 3 });
+  openTab(world);
+  await advance(world, 10 * MINUTE);
+  assert.deepEqual(world.pc.posts.map((p) => [p.start, p.rows]), [["2026-10-05", 7], ["2026-09-28", 12]]);
+  assert.equal(world.uber.requests.some((r) => r.week === "2026-10-12"), false);
+});
+
 test("a week longer than forty pages is handed over whole", async () => {
   const world = makeWorld({ "2026-08-10": 550 });
   openTab(world);
