@@ -110,7 +110,9 @@ Ops keeps the trips in `uber-trips.json` (`app/uberTrips.ts`, `api/uber-trips` i
   active" (added 2026-10-07 at Levi's word). The setting is his; on another browser or profile it has to be added
   again.
 - It only pulls while a driver-site page is open. The PC's scheduled task "Pulse Ops Uber Trip Pull" (Mondays
-  11:00 AM, after Uber's pay week ends at 4 AM; registered 2026-10-13, not from a script in either repo) opens
+  11:00 AM, after Uber's pay week ends at 4 AM, and daily at 4:30 AM since 2026-10-24 so the week under way is read
+  each morning, after Uber's day ends at 4 AM and while he is asleep; registered 2026-10-13, not from a script in
+  either repo) opens
   `https://drivers.uber.com/earnings/activities#pulse-weekly` in Chrome. Since 1.2.0 a tab with that `#pulse-weekly`
   closes itself (`@grant window.close`) 10 s after a run that ended by itself, or as soon as it finds no run due
   (Levi, 2026-10-13: "close the uber tab when it's done pulling"). A run Uber, the PC, a Stop or a pause ended leaves
